@@ -1,0 +1,19 @@
+name = "opportunity-radar"
+main = "worker.mjs"
+compatibility_date = "2025-06-01"
+
+[vars]
+# 정적 페이지 주소만 허용하려면 쉼표로 나열 (예: "https://아이디.github.io")
+ALLOW_ORIGIN = "*"
+CACHE_SECONDS = "1800"
+MAX_PAGES = "4"
+# 나라장터에서 늘 찾을 키워드 (비우면 최근 G2B_DAYS일 용역 공고 전체)
+G2B_KEYWORDS = ""
+G2B_DAYS = "3"
+# 직접 관리하는 공모전 목록 JSON 주소 (선택)
+CONTESTS_URL = ""
+
+# 인증키는 여기에 쓰지 말고 아래 명령으로 넣습니다.
+#   npx wrangler secret put BIZINFO_API_KEY
+#   npx wrangler secret put DATA_GO_KR_API_KEY
+#   npx wrangler secret put YOUTH_API_KEY

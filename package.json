@@ -1,0 +1,16 @@
+{
+  "name": "opportunity-radar",
+  "private": true,
+  "version": "0.1.0",
+  "description": "정부 지원사업·창업·청년정책·공공서비스·공공입찰·공모전을 공공 API로 모아 보는 검색 사이트",
+  "scripts": {
+    "test": "node --test collector/sources.test.mjs",
+    "collect": "node collector/collect.mjs",
+    "serve": "npx --yes serve .",
+    "worker:dev": "cd worker && npx --yes wrangler dev",
+    "worker:deploy": "cd worker && npx --yes wrangler deploy"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

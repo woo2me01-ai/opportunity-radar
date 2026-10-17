@@ -1,0 +1,60 @@
+# 기회레이더를 GitHub Pages로 운영하는 워크플로 예시입니다.
+# 사용하려면 이 파일을 저장소 루트의 .github/workflows/ 아래로 복사하세요.
+#
+# 준비
+#   1. 저장소 Settings → Secrets and variables → Actions 에 인증키 등록
+#        BIZINFO_API_KEY, DATA_GO_KR_API_KEY, YOUTH_API_KEY  (없는 출처는 건너뜁니다)
+#      필요하면 Variables 에 G2B_KEYWORDS (예: 플랫폼,홍보,교육) 등록
+#   2. Settings → Pages → Source 를 "GitHub Actions" 로 지정
+#
+# 매일 아침 공고를 모아 data/opportunities.json 을 만들고, 사이트와 함께 배포합니다.
+# 인증키는 수집 단계에서만 쓰이고 배포 결과물에는 들어가지 않습니다.
+
+name: 기회레이더 수집·배포
+
+on:
+  schedule:
+    - cron: "50 20 * * *" # 매일 05:50 (KST)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: opportunity-radar-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 변환 규칙 테스트
+        working-directory: opportunity-radar
+        run: node --test collector/sources.test.mjs
+      - name: 공고 수집
+        working-directory: opportunity-radar
+        env:
+          BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
+          DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
+          YOUTH_API_KEY: ${{ secrets.YOUTH_API_KEY }}
+          G2B_KEYWORDS: ${{ vars.G2B_KEYWORDS }}
+        run: node collector/collect.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: opportunity-radar
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

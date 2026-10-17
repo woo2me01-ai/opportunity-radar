@@ -1,0 +1,1176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>기회레이더</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="정부 지원사업, 창업 공고, 청년정책, 공공서비스, 공공입찰, 공모전을 공공 API로 모아 마감일 순으로 보여 주는 검색 사이트">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@600;700&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: 공고 대장(ledger). 위에는 검색과 마감 현황, 아래는 왼쪽 필터 레일 + 오른쪽 공고 목록. 공고 한 줄 = D-day 칸 | 본문 | 동작 */
+:root {
+  --paper: #f2f4f1;
+  --sheet: #ffffff;
+  --ink: #17202a;
+  --ink-2: #4a5561;
+  --mute: #737d87;
+  --rule: #d8ddd7;
+  --rule-2: #eaede8;
+  --accent: #0f6b5c;
+  --accent-ink: #ffffff;
+  --accent-soft: #deede7;
+  --urgent: #c0362a;
+  --urgent-soft: #fbe8e5;
+  --soon: #9a5b07;
+  --soon-soft: #fbefd9;
+  --open: #26704a;
+  --open-soft: #e3f2e8;
+  --later: #375b83;
+  --later-soft: #e4ecf5;
+  --always: #5f6873;
+  --always-soft: #edf0f2;
+  --display: "Hahmlet", "Noto Serif KR", "AppleMyungjo", serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1416; --sheet: #161d20; --ink: #e5eae7; --ink-2: #a9b3b7; --mute: #85909a;
+    --rule: #2a3438; --rule-2: #1f272a; --accent: #52c2a6; --accent-ink: #0a1714; --accent-soft: #15302a;
+    --urgent: #ff806f; --urgent-soft: #3a1d19; --soon: #f0b450; --soon-soft: #342913;
+    --open: #72d396; --open-soft: #15301f; --later: #8fb8e4; --later-soft: #172636;
+    --always: #a4adb6; --always-soft: #222a2e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1416; --sheet: #161d20; --ink: #e5eae7; --ink-2: #a9b3b7; --mute: #85909a;
+  --rule: #2a3438; --rule-2: #1f272a; --accent: #52c2a6; --accent-ink: #0a1714; --accent-soft: #15302a;
+  --urgent: #ff806f; --urgent-soft: #3a1d19; --soon: #f0b450; --soon-soft: #342913;
+  --open: #72d396; --open-soft: #15301f; --later: #8fb8e4; --later-soft: #172636;
+  --always: #a4adb6; --always-soft: #222a2e;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 15px/1.6 var(--body); -webkit-text-size-adjust: 100%; }
+a { color: var(--accent); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; }
+
+.shell {
+  max-width: 1240px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+
+/* 머리말 */
+.masthead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand svg { width: 42px; height: 42px; color: var(--accent); flex: none; }
+.brand .sweep { transform-origin: 24px 24px; }
+.loading .brand .sweep { animation: sweep 1.6s linear infinite; }
+@keyframes sweep { to { transform: rotate(360deg); } }
+.brand h1 { margin: 0; font: 700 1.875rem/1.1 var(--display); letter-spacing: -0.01em; }
+.brand p { margin: 3px 0 0; font-size: .875rem; color: var(--ink-2); }
+.conn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px;
+  border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet);
+  font-size: .8125rem; cursor: pointer; color: var(--ink-2);
+}
+.conn:hover { border-color: var(--ink-2); color: var(--ink); }
+.conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--soon); flex: none; }
+.conn[data-mode="file"] .dot, .conn[data-mode="live"] .dot { background: var(--open); }
+.conn[data-mode="loading"] .dot { background: var(--mute); }
+
+.search { margin-top: 22px; display: flex; gap: 8px; }
+.search-box { position: relative; flex: 1; min-width: 0; }
+.search-box svg { position: absolute; left: 15px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--mute); pointer-events: none; }
+.search input {
+  width: 100%; padding: 14px 16px 14px 44px; font-size: 1.0625rem; font-weight: 500;
+  border: 1.5px solid var(--rule); border-radius: var(--r); background: var(--sheet); color: var(--ink);
+}
+.search input::placeholder { color: var(--mute); font-weight: 400; }
+.search input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.suggest { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 10px; font-size: .8125rem; color: var(--mute); }
+.suggest button {
+  background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--ink-2);
+  text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px;
+}
+.suggest button:hover { color: var(--accent); text-decoration-color: currentColor; }
+
+/* 마감 현황: 빠른 상태 필터 */
+.pulse {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin-top: 24px;
+  background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r); overflow: hidden;
+}
+.pulse button {
+  display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 0;
+  background: var(--sheet); text-align: left; cursor: pointer;
+}
+.pulse button:hover { background: var(--rule-2); }
+.pulse button[aria-pressed="true"] { background: var(--accent-soft); box-shadow: inset 0 -3px 0 var(--accent); }
+.p-n { font: 600 1.5rem/1.15 var(--mono); font-variant-numeric: tabular-nums; }
+.p-l { font-size: .8125rem; color: var(--ink-2); }
+[data-status="today"] .p-n { color: var(--urgent); }
+[data-status="week"] .p-n { color: var(--soon); }
+[data-status="upcoming"] .p-n { color: var(--later); }
+[data-status="always"] .p-n { color: var(--always); }
+
+/* 4주 마감 막대 */
+.horizon { margin-top: 12px; padding: 14px 16px 10px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); }
+.horizon-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; }
+.horizon h2 { margin: 0; font: 600 .9375rem var(--body); }
+.horizon-note { font-size: .75rem; color: var(--mute); }
+.horizon-scroll { overflow-x: auto; margin-top: 6px; padding-bottom: 2px; }
+.hbars { display: grid; grid-template-columns: repeat(28, minmax(18px, 1fr)); gap: 3px; min-width: 560px; }
+.hb {
+  display: grid; grid-template-rows: 16px 60px 18px 14px; justify-items: center; align-items: end;
+  padding: 2px 0; border: 0; border-radius: 3px; background: none; cursor: pointer; color: var(--ink-2);
+}
+.hb:hover { background: var(--rule-2); }
+.hb.wkend { background: color-mix(in srgb, var(--rule-2) 60%, transparent); }
+.hb[aria-pressed="true"] { background: var(--accent-soft); }
+.hb-n { font: 600 .6875rem/1 var(--mono); color: var(--ink); }
+.hb-track { width: 100%; height: 60px; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid var(--rule); }
+.hb-bar { width: 62%; max-width: 16px; min-height: 0; border-radius: 2px 2px 0 0; background: var(--accent); }
+.hb.u3 .hb-bar { background: var(--urgent); }
+.hb.u7 .hb-bar { background: var(--soon); }
+.hb-d { font: 500 .6875rem/1 var(--mono); font-variant-numeric: tabular-nums; align-self: center; }
+.hb-m { font-size: .625rem; line-height: 1; color: var(--mute); }
+.hb.today .hb-m { color: var(--accent); font-weight: 600; }
+.hb.wkend .hb-d { color: var(--mute); }
+
+/* 본문 레이아웃 */
+.layout { display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 28px; margin-top: 28px; align-items: start; }
+
+/* 필터 레일 */
+.filters { position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); max-height: calc(100vh - 32px); overflow-y: auto; padding-right: 4px; }
+.filters > summary { display: none; }
+.fgroup { padding: 14px 0; border-top: 1px solid var(--rule); }
+.fgroup:first-of-type { border-top: 0; padding-top: 0; }
+.fgroup h3 { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 8px; font: 600 .75rem var(--body); letter-spacing: .06em; color: var(--mute); }
+.fgroup h3 small { font-weight: 400; letter-spacing: 0; }
+.opts { display: flex; flex-direction: column; gap: 1px; }
+.opt {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 8px; border: 0; border-radius: 4px; background: none; text-align: left; font-size: .875rem; cursor: pointer;
+}
+.opt:hover { background: var(--rule-2); }
+.opt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.opt .n { font: 500 .75rem var(--mono); color: var(--mute); font-variant-numeric: tabular-nums; }
+.opt[data-zero="true"] { color: var(--mute); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 4px 10px; border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet); font-size: .8125rem; cursor: pointer; }
+.chip:hover { border-color: var(--ink-2); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet); font-size: .875rem;
+}
+.fnote { margin: 6px 0 0; font-size: .75rem; color: var(--mute); }
+.check { display: flex; align-items: center; gap: 8px; font-size: .875rem; cursor: pointer; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: .8125rem; text-decoration: underline; text-underline-offset: 3px; }
+
+/* 결과 */
+.results { min-width: 0; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding-bottom: 12px; border-bottom: 2px solid var(--ink); }
+.count { margin: 0; font: 600 1.25rem/1.2 var(--display); }
+.count b { font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.tabs { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.tabs button { padding: 6px 12px; border: 0; background: var(--sheet); font-size: .8125rem; cursor: pointer; }
+.tabs button + button { border-left: 1px solid var(--rule); }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.tools .select { width: auto; padding: 6px 8px; font-size: .8125rem; }
+.active { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.active:empty { display: none; }
+.afil { display: inline-flex; align-items: center; gap: 6px; padding: 3px 6px 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: .8125rem; border: 0; cursor: pointer; }
+.afil span { font-size: .875rem; line-height: 1; }
+.afil.clear { background: none; text-decoration: underline; text-underline-offset: 3px; padding-left: 4px; }
+
+.notice {
+  margin-top: 12px; padding: 12px 14px; border: 1px dashed var(--soon); border-radius: var(--r);
+  background: var(--soon-soft); font-size: .875rem; color: var(--ink);
+}
+.notice p { margin: 0; }
+.notice.err { border-color: var(--urgent); background: var(--urgent-soft); }
+
+.list { margin-top: 12px; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); }
+.item { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 16px; padding: 16px; border-top: 1px solid var(--rule-2); }
+.item:first-child { border-top: 0; }
+.dday {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; align-self: start;
+  padding: 10px 4px; border-radius: 4px; text-align: center; background: var(--always-soft); color: var(--always);
+}
+.dday b { font: 600 1.125rem/1 var(--mono); font-variant-numeric: tabular-nums; }
+.dday span { font: 500 .6875rem/1.2 var(--mono); }
+.v-urgent .dday { background: var(--urgent-soft); color: var(--urgent); }
+.v-soon .dday { background: var(--soon-soft); color: var(--soon); }
+.v-open .dday { background: var(--open-soft); color: var(--open); }
+.v-upcoming .dday { background: var(--later-soft); color: var(--later); }
+.v-closed { opacity: .62; }
+.item-body { min-width: 0; }
+.item-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: .75rem; }
+.src { font-weight: 600; color: var(--accent); }
+.type { padding: 0 6px; border: 1px solid var(--rule); border-radius: 3px; color: var(--ink-2); }
+.type.contest { border-color: var(--later); color: var(--later); }
+.sample { padding: 0 6px; border: 1px dashed var(--soon); border-radius: 3px; color: var(--soon); }
+.item-title { margin: 3px 0 4px; font: 600 1.0625rem/1.45 var(--body); overflow-wrap: anywhere; }
+.item-title a { color: var(--ink); text-decoration: none; }
+.item-title a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.item-title mark, .item-meta mark { background: var(--soon-soft); color: inherit; padding: 0 1px; border-radius: 2px; }
+.item-meta { margin: 0; font-size: .875rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.item-period { margin: 3px 0 0; font: 500 .8125rem var(--mono); color: var(--mute); font-variant-numeric: tabular-nums; }
+.item-actions { display: flex; flex-direction: column; gap: 4px; }
+.icon-btn {
+  display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 4px;
+  background: none; color: var(--mute); cursor: pointer;
+}
+.icon-btn:hover { background: var(--rule-2); color: var(--ink); }
+.icon-btn svg { width: 20px; height: 20px; }
+.star[aria-pressed="true"] { color: var(--soon); }
+.star[aria-pressed="true"] svg path { fill: currentColor; }
+.more[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+.detail { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule); }
+.detail > p { margin: 0 0 12px; max-width: 68ch; }
+.detail dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0 0 14px; font-size: .8125rem; }
+.detail dt { color: var(--mute); }
+.detail dd { margin: 0; overflow-wrap: anywhere; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--rule); border-radius: 4px;
+  background: var(--sheet); font-size: .8125rem; font-weight: 500; color: var(--ink); text-decoration: none; cursor: pointer;
+}
+.btn:hover { border-color: var(--ink-2); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn-primary:hover { border-color: var(--accent); filter: brightness(1.08); }
+
+.empty { padding: 40px 20px; text-align: center; color: var(--ink-2); }
+.empty h3 { margin: 0 0 6px; font: 600 1.0625rem var(--body); color: var(--ink); }
+.empty p { margin: 0 0 14px; }
+.more-wrap { display: flex; justify-content: center; padding: 14px; border-top: 1px solid var(--rule-2); }
+
+/* 꼬리말 */
+.foot { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: .8125rem; color: var(--mute); }
+.foot p { margin: 0 0 6px; max-width: 80ch; }
+
+/* 데이터 연결 창 */
+dialog {
+  width: min(660px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0;
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); color: var(--ink);
+}
+dialog::backdrop { background: rgb(8 12 14 / .5); }
+.dlg { display: flex; flex-direction: column; gap: 16px; padding: 22px; }
+.dlg h2 { margin: 0; font: 700 1.25rem var(--display); }
+.dlg p { margin: 0; font-size: .875rem; color: var(--ink-2); }
+.dlg fieldset { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px; }
+.dlg legend, .dlg label.lbl { margin-bottom: 4px; font-size: .8125rem; font-weight: 600; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field input[type="url"], .field input[type="text"] {
+  width: 100%; padding: 9px 11px; border: 1px solid var(--rule); border-radius: 4px; background: var(--paper); font: 500 .8125rem var(--mono);
+}
+.field small { font-size: .75rem; color: var(--mute); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+.src-table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.src-table th, .src-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--rule-2); white-space: nowrap; }
+.src-table th { font-weight: 600; color: var(--mute); font-size: .75rem; background: var(--paper); }
+.src-table tr:last-child td { border-bottom: 0; }
+.state { font: 500 .75rem var(--mono); }
+.state.ok { color: var(--open); }
+.state.bad { color: var(--urgent); }
+.state.off { color: var(--mute); }
+.dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.conn-result { min-height: 1.4em; font-size: .8125rem; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 6px; background: var(--ink); color: var(--paper);
+  font-size: .875rem; z-index: 20;
+}
+
+@media (max-width: 880px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .filters { position: static; max-height: none; overflow: visible; padding: 0; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--r); }
+  .filters > summary {
+    display: flex; justify-content: space-between; align-items: center; padding: 12px 14px;
+    font-weight: 600; font-size: .9375rem; cursor: pointer; list-style: none;
+  }
+  .filters > summary::-webkit-details-marker { display: none; }
+  .filters > summary::after { content: "펼치기"; font-size: .75rem; font-weight: 400; color: var(--mute); }
+  .filters[open] > summary::after { content: "접기"; }
+  .filters .fbody { padding: 0 14px 6px; }
+  .fgroup:first-of-type { border-top: 1px solid var(--rule); padding-top: 14px; }
+}
+@media (max-width: 720px) {
+  .pulse { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .brand h1 { font-size: 1.625rem; }
+}
+@media (max-width: 520px) {
+  .shell { padding-block: 18px 40px; }
+  .item { grid-template-columns: 60px minmax(0, 1fr) auto; gap: 12px; padding: 14px 12px; }
+  .dday b { font-size: 1rem; }
+  .p-n { font-size: 1.25rem; }
+  .pulse button { padding: 10px; }
+  .search input { font-size: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading .brand .sweep { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="shell loading" id="app">
+  <header class="masthead">
+    <div class="brand">
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="2.5"/>
+        <circle cx="24" cy="24" r="13" fill="none" stroke="currentColor" stroke-width="2" opacity=".55"/>
+        <circle cx="24" cy="24" r="5" fill="none" stroke="currentColor" stroke-width="2" opacity=".35"/>
+        <g class="sweep"><path d="M24 24 L24 3 A21 21 0 0 1 42.2 13.5 Z" fill="currentColor" opacity=".22"/><line x1="24" y1="24" x2="24" y2="3" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></g>
+        <circle cx="33" cy="15" r="3" fill="currentColor"/>
+      </svg>
+      <div>
+        <h1>기회레이더</h1>
+        <p>정부 지원사업 · 창업 · 청년정책 · 공공서비스 · 공공입찰 · 공모전</p>
+      </div>
+    </div>
+    <button class="conn" id="conn" type="button" data-mode="loading" aria-haspopup="dialog">
+      <span class="dot" aria-hidden="true"></span><span id="conn-text">불러오는 중</span>
+    </button>
+  </header>
+
+  <form class="search" id="search-form" role="search">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg>
+      <label for="q" class="visually-hidden" hidden>검색어</label>
+      <input id="q" name="q" type="search" autocomplete="off" placeholder="사업명, 기관, 키워드로 찾기 (예: 수출바우처, 해커톤, 월세)" aria-label="공고 검색">
+    </div>
+  </form>
+  <div class="suggest" id="suggest">
+    <span>자주 찾는 검색어</span>
+    <button type="button">예비창업</button>
+    <button type="button">바우처</button>
+    <button type="button">R&amp;D</button>
+    <button type="button">수출</button>
+    <button type="button">해커톤</button>
+    <button type="button">청년</button>
+    <button type="button">소상공인</button>
+    <button type="button">용역</button>
+  </div>
+
+  <div class="pulse" id="pulse" role="group" aria-label="마감 현황 빠른 필터">
+    <button type="button" data-status="today" aria-pressed="false"><span class="p-n">0</span><span class="p-l">오늘 마감</span></button>
+    <button type="button" data-status="week" aria-pressed="false"><span class="p-n">0</span><span class="p-l">7일 안에 마감</span></button>
+    <button type="button" data-status="open" aria-pressed="false"><span class="p-n">0</span><span class="p-l">접수 중</span></button>
+    <button type="button" data-status="upcoming" aria-pressed="false"><span class="p-n">0</span><span class="p-l">접수 예정</span></button>
+    <button type="button" data-status="always" aria-pressed="false"><span class="p-n">0</span><span class="p-l">상시 · 예산 소진 시</span></button>
+    <button type="button" data-status="saved" aria-pressed="false"><span class="p-n">0</span><span class="p-l">관심 공고</span></button>
+  </div>
+
+  <section class="horizon" aria-labelledby="horizon-title">
+    <div class="horizon-head">
+      <h2 id="horizon-title">앞으로 4주 마감 일정</h2>
+      <span class="horizon-note" id="horizon-note">막대를 누르면 그날 마감되는 공고만 봅니다</span>
+    </div>
+    <div class="horizon-scroll"><div class="hbars" id="horizon"></div></div>
+  </section>
+
+  <div class="layout">
+    <details class="filters" id="filters" open>
+      <summary>필터 <span id="filter-count"></span></summary>
+      <div class="fbody">
+        <div class="fgroup">
+          <h3>유형</h3>
+          <div class="opts" id="f-types"></div>
+        </div>
+        <div class="fgroup">
+          <h3>내 조건 <small>이 브라우저에 저장됩니다</small></h3>
+          <div class="chips" id="f-targets"></div>
+          <div class="field" style="margin-top:12px">
+            <label class="lbl" for="f-region" style="font-size:.8125rem">지역</label>
+            <select class="select" id="f-region"></select>
+          </div>
+          <p class="fnote">지역을 고르면 전국 대상 공고도 함께 보입니다.</p>
+        </div>
+        <div class="fgroup">
+          <h3>분야</h3>
+          <div class="chips" id="f-fields"></div>
+        </div>
+        <div class="fgroup">
+          <h3>출처</h3>
+          <div class="opts" id="f-sources"></div>
+        </div>
+        <div class="fgroup">
+          <label class="check"><input type="checkbox" id="f-closed"> 마감된 공고도 보기</label>
+        </div>
+        <div class="fgroup">
+          <button type="button" class="linkbtn" id="reset">필터 모두 지우기</button>
+        </div>
+      </div>
+    </details>
+
+    <main class="results" id="results">
+      <div class="toolbar">
+        <h2 class="count" id="count" aria-live="polite">공고 <b>0</b>건</h2>
+        <div class="tools">
+          <div class="tabs" role="group" aria-label="보기">
+            <button type="button" data-view="all" aria-pressed="true">전체</button>
+            <button type="button" data-view="saved" aria-pressed="false">관심 <span id="saved-n">0</span></button>
+          </div>
+          <label for="sort" hidden>정렬</label>
+          <select class="select" id="sort" aria-label="정렬">
+            <option value="deadline">마감 임박순</option>
+            <option value="recent">최근 등록순</option>
+            <option value="title">가나다순</option>
+          </select>
+        </div>
+      </div>
+      <div class="active" id="active"></div>
+      <div class="notice" id="notice" hidden></div>
+      <div class="list" id="list"></div>
+    </main>
+  </div>
+
+  <footer class="foot">
+    <p>공공데이터 출처: 중소벤처기업부 기업마당 지원사업정보, 창업진흥원 K-Startup 사업공고, 한국고용정보원 온통청년 청년정책, 행정안전부 대한민국 공공서비스(혜택) 정보, 조달청 나라장터 입찰공고정보. 각 데이터는 제공기관의 이용 조건을 따릅니다.</p>
+    <p>공고 내용과 마감일은 원문과 다를 수 있습니다. 신청하기 전에 반드시 원문 공고를 확인하세요.</p>
+  </footer>
+</div>
+
+<dialog id="settings" aria-labelledby="settings-title">
+  <form method="dialog" class="dlg" id="settings-form">
+    <h2 id="settings-title">데이터 연결</h2>
+    <p>공공 API 인증키는 브라우저에 두지 않습니다. 인증키는 수집 스크립트나 API 프록시(Cloudflare Worker)에 넣고, 이 화면에는 그 결과 주소만 적습니다.</p>
+    <fieldset>
+      <legend>불러오는 방식</legend>
+      <label class="check"><input type="radio" name="mode" value="auto" id="mode-auto" checked> 자동: 실시간 API → 수집 파일 → 예시 데이터 순서로 시도</label>
+      <label class="check"><input type="radio" name="mode" value="sample" id="mode-sample"> 예시 데이터만 보기</label>
+    </fieldset>
+    <div class="field">
+      <label class="lbl" for="api-base">실시간 API 프록시 주소</label>
+      <input type="url" id="api-base" placeholder="https://opportunity-radar.계정.workers.dev" spellcheck="false">
+      <small>worker 폴더의 프록시를 배포한 주소입니다. 비워 두면 건너뜁니다.</small>
+    </div>
+    <div class="field">
+      <label class="lbl" for="data-url">수집 파일 주소</label>
+      <input type="text" id="data-url" placeholder="data/opportunities.json" spellcheck="false">
+      <small>collector 스크립트가 하루 한 번 만드는 JSON 파일입니다.</small>
+    </div>
+    <div class="table-wrap">
+      <table class="src-table">
+        <thead><tr><th>출처</th><th>제공기관</th><th>상태</th><th>인증키</th></tr></thead>
+        <tbody id="src-rows"></tbody>
+      </table>
+    </div>
+    <div class="conn-result" id="conn-result" aria-live="polite"></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="test-conn">연결 확인</button>
+      <button type="button" class="btn" id="close-settings">닫기</button>
+      <button type="submit" class="btn btn-primary" id="save-settings" value="save">저장하고 다시 불러오기</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  'use strict';
+  document.documentElement.lang = 'ko';
+
+  /* ───────── 기본 정의 ───────── */
+  const SOURCE_INFO = {
+    bizinfo:  { label: '기업마당',  owner: '중소벤처기업부',        home: 'https://www.bizinfo.go.kr',                 keyUrl: 'https://www.bizinfo.go.kr/apiList.do' },
+    kstartup: { label: 'K-Startup', owner: '창업진흥원',            home: 'https://www.k-startup.go.kr',              keyUrl: 'https://www.data.go.kr/data/15125364/openapi.do' },
+    youth:    { label: '온통청년',  owner: '한국고용정보원',        home: 'https://www.youthcenter.go.kr',            keyUrl: 'https://www.youthcenter.go.kr/' },
+    gov24:    { label: '보조금24',  owner: '행정안전부',            home: 'https://www.gov.kr/portal/rcvfvrSvc/main', keyUrl: 'https://www.data.go.kr/data/15113968/openapi.do' },
+    g2b:      { label: '나라장터',  owner: '조달청',                home: 'https://www.g2b.go.kr',                    keyUrl: 'https://www.data.go.kr/data/15129394/openapi.do' },
+    contest:  { label: '직접 등록', owner: '운영자가 관리하는 공모전 목록', home: '',                         keyUrl: '' },
+  };
+  const BASE_TYPE = { bizinfo: '지원사업', kstartup: '창업', youth: '청년정책', gov24: '공공서비스', g2b: '공공입찰', contest: '공모전' };
+  const TYPES = ['지원사업', '창업', '청년정책', '공공서비스', '공공입찰', '공모전'];
+  const CONTEST_RE = /공모전|경진대회|해커톤|챌린지|콘테스트|아이디어\s?공모|어워드|경연/;
+
+  const FIELD_RULES = [
+    ['자금·금융',   /금융|융자|보증|자금|대출|투자|지원금|장려금|보조금/],
+    ['기술·R&D',    /기술|R&D|연구|개발|특허|디지털|스마트|AI|인공지능|데이터|SW|소프트웨어/i],
+    ['인력·일자리', /인력|일자리|고용|채용|취업|인턴|일경험|구직|면접/],
+    ['수출·판로',   /수출|해외|글로벌|판로|마케팅|내수|유통|전시회|박람회|커머스/],
+    ['창업',        /창업|스타트업|사업화|액셀러|엑셀러/],
+    ['경영·컨설팅', /경영|컨설팅|진단|멘토링|ESG/],
+    ['주거·생활',   /주거|주택|월세|전세|임대|생활안정|에너지/],
+    ['복지·건강',   /복지|건강|의료|돌봄|출산|육아|보육|심리|마음/],
+    ['문화·홍보',   /문화|예술|콘텐츠|관광|체육|디자인|영상|홍보|슬로건|브랜드/],
+    ['환경',        /환경|탄소|기후|에너지 ?전환|ESG/],
+  ];
+  const TARGET_RULES = [
+    ['누구나',     /국민|누구나|일반인|시민|도민|구민|제한 ?없음|개인/],
+    ['청년',       /청년|만 ?(1[5-9]|3[0-9])\s?~|만 ?(34|39)세/],
+    ['학생',       /대학|학생|재학|청소년/],
+    ['예비창업자', /예비 ?창업/],
+    ['창업기업',   /창업 ?기업|초기 ?창업|창업 ?\d+ ?년|업력|스타트업|벤처/],
+    ['중소기업',   /중소|중견|제조|기업|업체|사업자/],
+    ['소상공인',   /소상공인|자영업|전통시장|상인/],
+    ['기관·단체',  /기관|단체|협회|조합|비영리|법인/],
+  ];
+  const REGION_RULES = [
+    ['서울', /서울/], ['부산', /부산/], ['대구', /대구/], ['인천', /인천/], ['광주', /광주/], ['대전', /대전/],
+    ['울산', /울산/], ['세종', /세종/], ['경기', /경기/], ['강원', /강원/], ['충북', /충북|충청북/], ['충남', /충남|충청남/],
+    ['전북', /전북|전라북/], ['전남', /전남|전라남/], ['경북', /경북|경상북/], ['경남', /경남|경상남/], ['제주', /제주/],
+  ];
+  const STATUS_TEST = {
+    today:    it => it.status === 'soon' && it.dleft === 0,
+    week:     it => it.status === 'soon',
+    open:     it => it.status === 'open' || it.status === 'soon',
+    upcoming: it => it.status === 'upcoming',
+    always:   it => it.status === 'always',
+  };
+  const STATUS_LABEL = { today: '오늘 마감', week: '7일 안에 마감', open: '접수 중', upcoming: '접수 예정', always: '상시 · 예산 소진 시' };
+  const PAGE = 20;
+  const DEFAULT_DATA_URL = 'data/opportunities.json';
+  const KEYS = { config: 'radar.config.v1', saved: 'radar.saved.v1', prefs: 'radar.prefs.v1' };
+
+  /* ───────── 도구 ───────── */
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const safeUrl = u => (/^https?:\/\//i.test(u || '') ? u : '');
+  const num = n => Number(n || 0).toLocaleString('ko-KR');
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* 저장소를 쓸 수 없는 환경 */ } },
+  };
+
+  const DAY = 86400000;
+  const WD = '일월화수목금토';
+  const startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+  const TODAY = startOfToday();
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const parseISO = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+  const shift = n => { const d = new Date(TODAY); d.setDate(d.getDate() + n); return d; };
+  const diffDays = s => { const d = parseISO(s); return d ? Math.round((d - TODAY) / DAY) : null; };
+  const md = s => { const d = parseISO(s); return d ? `${d.getMonth() + 1}.${String(d.getDate()).padStart(2, '0')}` : ''; };
+  const mdw = s => { const d = parseISO(s); return d ? `${md(s)} (${WD[d.getDay()]})` : ''; };
+  const ymdDots = s => (s ? s.slice(0, 10).replace(/-/g, '.') : '');
+  const won = n => {
+    if (!n) return '';
+    if (n >= 1e8) return `${(n / 1e8).toFixed(n % 1e8 ? 1 : 0)}억 원`;
+    if (n >= 1e4) return `${num(Math.round(n / 1e4))}만 원`;
+    return `${num(n)}원`;
+  };
+
+  /* ───────── 예시 데이터 (오늘 날짜 기준 상대 일정) ───────── */
+  // [출처, 제목, 기관, 분류, 지원대상, 지역, 접수 시작(오늘+일), 마감(오늘+일), 개요, 추가]
+  const SAMPLE_ROWS = [
+    ['bizinfo', '2026년 하반기 수출바우처 참여기업 추가 모집', '○○도 경제진흥원', '수출', '직전년도 수출실적 10만 달러 이상 중소기업', '경기', -10, 2, '해외 마케팅, 통번역, 해외인증 비용을 바우처로 지원합니다. 기업당 최대 3,000만 원이며 자부담 30%가 필요합니다.', { tags: ['수출', '바우처'] }],
+    ['bizinfo', '스마트공장 구축·고도화 지원사업 2차 공고', '○○테크노파크', '기술', '제조업을 영위하는 중소·중견기업', '전국', -20, 12, '공정 데이터 수집, MES·ERP 연동 등 스마트공장 구축 비용의 최대 50%를 지원합니다.', { tags: ['스마트공장', '제조'] }],
+    ['bizinfo', '소상공인 온라인 판로 디지털 전환 바우처', '○○시 소상공인지원센터', '내수', '관내 사업장을 둔 소상공인', '서울', -5, 0, '라이브커머스, 상세페이지 제작, 온라인몰 입점 비용을 최대 400만 원까지 지원합니다.', { tags: ['소상공인', '온라인판로'] }],
+    ['bizinfo', '중소기업 긴급경영안정자금 정책융자', '○○ 중소기업 정책금융기관', '금융', '일시적 경영애로를 겪는 중소기업', '전국', null, null, '매출 감소, 재해 피해 등으로 일시적 경영난을 겪는 기업에 운전자금을 저리로 융자합니다.', { period: '예산 소진 시까지', tags: ['정책자금', '융자'] }],
+    ['bizinfo', '제조기업 ESG 경영 진단·컨설팅 지원', '○○상공회의소', '경영', '대구 소재 제조 중소기업', '대구', -3, 18, '공급망 ESG 실사 대응을 위한 진단과 맞춤 컨설팅을 무료로 제공합니다.', { tags: ['ESG', '컨설팅'] }],
+    ['bizinfo', '지역특화산업 R&D 기획과제 모집', '○○도 지역혁신센터', '기술', '충북 소재 중소기업 및 연구기관', '충북', 4, 25, '지역 주력산업과 연계한 R&D 기획과제를 모집합니다. 과제당 최대 1억 원, 6개월입니다.', { tags: ['R&D'] }],
+    ['bizinfo', '해외 전시회 한국관 참가기업 모집 (북미 가전·IT 전시회)', '○○ 무역진흥 지원기관', '수출', '수출 유망 중소기업', '전국', -7, 5, '부스 임차료와 장치비, 편도 물류비를 지원합니다. 선정 규모는 25개사입니다.', { tags: ['전시회', '해외마케팅'] }],
+    ['bizinfo', '청년 일자리 도약 장려금 참여기업 모집', '○○지방고용노동청', '인력', '청년을 정규직으로 채용한 5인 이상 중소기업', '전국', -30, 40, '만 15~34세 청년을 정규직으로 채용해 6개월 이상 고용을 유지하면 최대 1,200만 원을 지원합니다.', { tags: ['채용', '장려금'] }],
+    ['bizinfo', '농식품 벤처 판로개척 지원', '○○농업기술원', '내수', '농식품 분야 창업기업', '전남', -40, -5, '온·오프라인 유통 입점과 시식 행사를 지원했습니다.', { tags: ['농식품'] }],
+    ['kstartup', '2026년 예비창업자 사업화 지원 추가모집', '○○ 창업지원기관', '사업화', '공고일 기준 사업자 등록이 없는 예비창업자', '전국', -12, 1, '시제품 제작, 마케팅 등 사업화 자금을 최대 1억 원까지 지원하고 전담 멘토링을 제공합니다.', { tags: ['예비창업', '사업화'] }],
+    ['kstartup', '창업도약 단계 스케일업 프로그램 참가기업 모집', '○○ 창업진흥 전담기관', '사업화', '업력 3년 이상 7년 이내 창업기업', '전국', -2, 9, '투자 유치와 해외 진출을 위한 사업화 자금과 액셀러레이팅을 지원합니다.', { tags: ['도약기', '스케일업'] }],
+    ['kstartup', '대학 창업동아리 아이디어 경진대회', '○○대학교 창업지원단', '행사·네트워크', '광주·전남 소재 대학 재학생 팀', '광주', -6, 6, '아이디어 발표 심사로 우수팀 10곳을 뽑아 시제품 제작비와 시상금을 지급합니다.', { tags: ['경진대회', '대학생'] }],
+    ['kstartup', '글로벌 액셀러레이팅 프로그램 (동남아 진출)', '○○ 글로벌창업센터', '글로벌', '해외 진출을 준비하는 창업 7년 이내 기업', '전국', 2, 20, '현지 파트너 매칭, 법인 설립 자문, 데모데이 참가를 지원합니다.', { tags: ['글로벌', '액셀러레이팅'] }],
+    ['kstartup', '○○ 창업 해커톤 2026 참가팀 모집', '○○ 창조경제혁신센터', '행사·네트워크', '만 39세 이하 청년 및 예비창업자 누구나', '부산', -1, 3, '48시간 동안 지역 문제를 푸는 서비스를 만드는 해커톤입니다. 대상 상금은 500만 원입니다.', { tags: ['해커톤', '청년'] }],
+    ['kstartup', '공공기술 이전 기반 창업 R&D 지원', '○○ 연구개발특구 지원기관', '기술개발(R&D)', '공공기술을 이전받은 창업 7년 이내 기업', '대전', -15, 15, '공공연구기관 기술을 이전받은 뒤 필요한 후속 R&D 비용을 2년간 최대 3억 원 지원합니다.', { tags: ['R&D', '기술이전'] }],
+    ['kstartup', '로컬크리에이터 지역가치 창업가 모집', '○○도 창조경제혁신센터', '사업화', '강원 지역 예비창업자 및 창업 3년 이내 청년', '강원', -4, 22, '지역 자원을 활용한 비즈니스 모델에 최대 3,000만 원의 사업화 자금을 지원합니다.', { tags: ['로컬', '청년'] }],
+    ['youth', '청년 월세 한시 특별지원', '○○시 청년정책과', '주거', '만 19~34세 무주택 청년 (부모와 따로 사는 경우)', '전국', -60, 45, '월 최대 20만 원씩 최장 12개월 동안 월세를 지원합니다.', { tags: ['월세', '주거'] }],
+    ['youth', '청년 면접정장 무료 대여', '○○구 일자리센터', '일자리', '관내 거주 만 18~39세 구직 청년', '서울', null, null, '면접용 정장을 1년에 10회까지 무료로 빌려 드립니다.', { period: '상시 신청', tags: ['면접', '구직'] }],
+    ['youth', '청년 일경험 프로그램 (기업탐방형) 참여자 모집', '○○ 고용지원 운영기관', '일자리', '만 15~34세 미취업 청년', '전국', -3, 11, '직무 현장을 탐방하고 실무 과제를 수행하며 참여수당을 받습니다.', { tags: ['일경험', '인턴'] }],
+    ['youth', '청년 마음건강 바우처', '○○도 청년센터', '복지문화', '경남 거주 만 19~34세 청년', '경남', -9, 27, '전문 심리상담 8회 이용권을 제공합니다.', { tags: ['심리상담', '바우처'] }],
+    ['youth', '청년 정책 아이디어 공모전', '○○도 청년정책 네트워크', '참여권리', '전북 거주 또는 활동 중인 만 19~39세 청년', '전북', -8, 4, '청년이 직접 제안하는 정책 아이디어를 공모합니다. 우수 제안은 내년 시책에 반영합니다.', { tags: ['정책제안'] }],
+    ['gov24', '에너지바우처 (하절기·동절기 통합)', '○○ 에너지복지 전담기관', '생활안정', '기초생활수급 가구 중 노인·장애인·영유아 등이 포함된 가구', '전국', -100, 70, '냉난방 에너지 비용을 바우처로 지원합니다.', { tags: ['에너지', '바우처'] }],
+    ['gov24', '출산가정 산후조리 경비 지원', '○○도 보건복지국', '임신·출산', '도내 출산 가정', '제주', null, null, '출생아 1명당 산후조리 경비를 지역화폐로 지원합니다.', { period: '출생일로부터 1년 이내 상시 신청', tags: ['출산'] }],
+    ['gov24', '소상공인 고용보험료 지원', '○○ 소상공인 지원기관', '고용·창업', '고용보험에 가입한 1인 자영업자', '전국', null, null, '자영업자 고용보험료의 20~80%를 최대 5년간 지원합니다.', { period: '상시 신청', tags: ['고용보험', '자영업'] }],
+    ['gov24', '통합문화이용권 (문화누리카드)', '○○ 문화예술 지원기관', '문화·환경', '만 6세 이상 기초생활수급자·차상위계층', '전국', -280, 45, '문화·여행·체육 활동에 쓸 수 있는 연 14만 원 이용권입니다.', { tags: ['문화', '이용권'] }],
+    ['g2b', '공공데이터 개방 플랫폼 기능 고도화 용역', '○○시 정보통신과', '용역 (일반용역)', '소프트웨어사업자 신고 업체', '세종', -4, 3, '데이터 카탈로그를 개편하고 Open API 게이트웨이를 고도화합니다.', { amount: 240000000, tags: ['SW', '공공데이터'] }],
+    ['g2b', '○○군 관광 홍보영상 제작 용역', '○○군 문화관광과', '용역 (일반용역)', '영상제작 업종 등록 업체', '경북', -2, 8, '관광지 홍보영상 3편과 숏폼 10편을 제작합니다.', { amount: 80000000, tags: ['영상', '관광'] }],
+    ['g2b', '청년창업지원센터 운영 위탁 용역', '○○광역시 일자리경제과', '용역 (일반용역)', '창업지원 운영 실적이 있는 비영리법인 또는 기업', '인천', -6, 2, '센터 운영, 입주기업 보육 프로그램, 성과관리 전반을 위탁합니다.', { amount: 560000000, tags: ['위탁운영'] }],
+    ['g2b', 'AI 기반 민원 상담 시스템 구축 사업', '○○ 공공기관 디지털혁신실', '용역 (기술용역)', '소프트웨어사업자 신고 업체 (대기업 참여 제한)', '전국', -1, 14, '생성형 AI 상담 챗봇과 상담 이력 분석 대시보드를 구축합니다.', { amount: 1200000000, tags: ['AI', '챗봇'] }],
+    ['contest', '제○회 공공데이터 활용 아이디어 공모전', '○○ 데이터 진흥기관', '공모전', '공공데이터에 관심 있는 국민 누구나 (개인 또는 5인 이내 팀)', '전국', -14, 7, '공공데이터를 활용한 서비스 아이디어와 제품·서비스 개발 두 부문을 공모합니다. 총상금 5,000만 원입니다.', { tags: ['공공데이터'] }],
+    ['contest', '○○시 도시브랜드 슬로건 시민 공모전', '○○시 홍보담당관', '공모전', '대전 시민 및 관내 직장인·학생', '대전', -3, 10, '도시 정체성을 담은 슬로건과 짧은 설명을 공모합니다.', { tags: ['네이밍', '슬로건'] }],
+    ['contest', '탄소중립 생활실천 숏폼 영상 공모전', '○○ 환경교육센터', '공모전', '중·고등학생, 대학생, 일반인', '전국', 5, 35, '1분 이내 숏폼 영상으로 생활 속 탄소중립 실천법을 소개합니다.', { tags: ['영상', '환경'] }],
+    ['contest', '농식품 창업 아이디어 경진대회', '○○도 농업기술원', '공모전', '예비창업자 및 창업 3년 이내 기업', '전남', -20, -2, '농식품 분야 창업 아이디어를 겨루는 대회로, 접수가 끝났습니다.', { tags: ['농식품'] }],
+  ];
+
+  function buildSample() {
+    return SAMPLE_ROWS.map(([source, title, org, category, target, region, s, e, summary, extra], i) => {
+      const start = s == null ? null : iso(shift(s));
+      const end = e == null ? null : iso(shift(e));
+      return {
+        id: `sample-${i + 1}`, source, title, org, category, target, region, start, end,
+        periodText: extra.period || `${ymdDots(start)} ~ ${ymdDots(end)}`,
+        url: SOURCE_INFO[source].home, summary, amount: extra.amount || null, tags: extra.tags || [],
+        postedAt: iso(shift(s == null ? -20 : Math.min(s, 0) - 1)), sample: true,
+      };
+    });
+  }
+
+  /* ───────── 정규화 결과에 파생 정보 붙이기 ───────── */
+  function enrich(raw) {
+    const it = { ...raw };
+    it.tags = Array.isArray(it.tags) ? it.tags : String(it.tags || '').split(/[,#\s]+/).filter(Boolean);
+    const tagText = it.tags.join(' ');
+    const hay = `${it.title} ${it.category || ''} ${tagText}`;
+
+    it.types = [BASE_TYPE[it.source] || '지원사업'];
+    if (it.source === 'bizinfo' && /창업/.test(it.category || '')) it.types.push('창업');
+    if (CONTEST_RE.test(it.title) && !it.types.includes('공모전')) it.types.push('공모전');
+
+    it.fields = FIELD_RULES.filter(([, re]) => re.test(hay)).map(([n]) => n).slice(0, 3);
+    if (it.source === 'g2b') it.fields = ['용역·입찰', ...it.fields].slice(0, 3);
+    if (!it.fields.length) it.fields = ['기타'];
+
+    const targetHay = `${it.target || ''} ${it.title}`;
+    it.targets = TARGET_RULES.filter(([, re]) => re.test(targetHay)).map(([n]) => n);
+
+    const regionHay = `${it.region || ''} ${it.title} ${it.org || ''} ${tagText}`;
+    it.regions = REGION_RULES.filter(([, re]) => re.test(regionHay)).map(([n]) => n);
+    if (!it.regions.length || /전국/.test(it.region || '')) it.regions.unshift('전국');
+
+    const sd = diffDays(it.start), ed = diffDays(it.end);
+    const always = it.always ?? /상시|수시|소진|연중|선착순/.test(it.periodText || '');
+    it.dleft = ed;
+    if (ed == null) it.status = sd != null && sd > 0 ? 'upcoming' : always ? 'always' : 'unknown';
+    else if (ed < 0) it.status = 'closed';
+    else if (sd != null && sd > 0) it.status = 'upcoming';
+    else if (ed <= 7) it.status = 'soon';
+    else it.status = 'open';
+    it.visual = it.status === 'soon' && ed <= 2 ? 'urgent' : it.status;
+
+    it.search = [it.title, it.org, it.category, it.target, it.region, it.summary, tagText, SOURCE_INFO[it.source]?.label, it.types.join(' ')]
+      .join(' ').toLowerCase();
+    return it;
+  }
+
+  /* ───────── 상태 ───────── */
+  const saved = new Set(store.get(KEYS.saved, []));
+  const prefs = store.get(KEYS.prefs, {});
+  const state = {
+    q: '', tokens: [],
+    types: new Set(), sources: new Set(), fields: new Set(),
+    targets: new Set(prefs.targets || []), region: prefs.region || '',
+    status: '', date: '', view: 'all', includeClosed: false,
+    sort: prefs.sort || 'deadline', limit: PAGE, open: new Set(),
+  };
+  let ITEMS = [];
+  let META = { mode: 'loading' };
+
+  const preds = {
+    q:       it => state.tokens.every(t => it.search.includes(t)),
+    view:    it => state.view !== 'saved' || saved.has(it.id),
+    closed:  it => state.includeClosed || state.view === 'saved' || it.status !== 'closed',
+    types:   it => !state.types.size || it.types.some(t => state.types.has(t)),
+    sources: it => !state.sources.size || state.sources.has(it.source),
+    fields:  it => !state.fields.size || it.fields.some(f => state.fields.has(f)),
+    targets: it => !state.targets.size || it.targets.some(t => state.targets.has(t)),
+    region:  it => !state.region || it.regions.includes(state.region) || it.regions.includes('전국'),
+    status:  it => !state.status || STATUS_TEST[state.status](it),
+    date:    it => !state.date || it.end === state.date,
+  };
+  const filtered = (skip = []) => ITEMS.filter(it => Object.keys(preds).every(k => skip.includes(k) || preds[k](it)));
+
+  const sorters = {
+    deadline: (a, b) => rank(a) - rank(b) || (a.end || '').localeCompare(b.end || '') || a.title.localeCompare(b.title, 'ko'),
+    recent:   (a, b) => (b.postedAt || '').localeCompare(a.postedAt || '') || rank(a) - rank(b),
+    title:    (a, b) => a.title.localeCompare(b.title, 'ko'),
+  };
+  function rank(it) {
+    if (it.status === 'closed') return 100000 - (it.dleft || 0);
+    if (it.status === 'always') return 50000;
+    if (it.status === 'unknown') return 60000;
+    if (it.status === 'upcoming') return 20000 + (diffDays(it.start) ?? 0);
+    return it.dleft ?? 40000;
+  }
+
+  /* ───────── 필터 레일 만들기 ───────── */
+  const ICONS = {
+    star: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.6L12 16.5l-5.1 2.7 1-5.6-4.1-4 5.7-.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
+    chevron: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  };
+
+  function buildFilters() {
+    $('#f-types').innerHTML = TYPES.map(t =>
+      `<button type="button" class="opt" data-facet="types" data-value="${esc(t)}" aria-pressed="false"><span>${esc(t)}</span><span class="n">0</span></button>`).join('');
+    $('#f-sources').innerHTML = Object.entries(SOURCE_INFO).map(([k, v]) =>
+      `<button type="button" class="opt" data-facet="sources" data-value="${k}" aria-pressed="false"><span>${esc(v.label)}</span><span class="n">0</span></button>`).join('');
+    $('#f-targets').innerHTML = TARGET_RULES.map(([t]) =>
+      `<button type="button" class="chip" data-facet="targets" data-value="${esc(t)}" aria-pressed="false">${esc(t)}</button>`).join('');
+    $('#f-fields').innerHTML = [...FIELD_RULES.map(([f]) => f), '용역·입찰', '기타'].map(f =>
+      `<button type="button" class="chip" data-facet="fields" data-value="${esc(f)}" aria-pressed="false">${esc(f)}</button>`).join('');
+    $('#f-region').innerHTML = '<option value="">전체 지역</option>' + REGION_RULES.map(([r]) => `<option value="${r}">${r}</option>`).join('');
+    $('#f-region').value = state.region;
+    $('#sort').value = state.sort;
+  }
+
+  /* ───────── 그리기 ───────── */
+  function render() {
+    const items = filtered().sort(sorters[state.sort]);
+    renderPulse();
+    renderHorizon();
+    renderFacets();
+    renderActive();
+    renderList(items);
+    store.set(KEYS.prefs, { targets: [...state.targets], region: state.region, sort: state.sort });
+  }
+
+  function renderPulse() {
+    const base = filtered(['status', 'date', 'view']);
+    for (const btn of $$('#pulse button')) {
+      const s = btn.dataset.status;
+      const n = s === 'saved' ? ITEMS.filter(it => saved.has(it.id)).length : base.filter(STATUS_TEST[s]).length;
+      $('.p-n', btn).textContent = num(n);
+      btn.setAttribute('aria-pressed', String(s === 'saved' ? state.view === 'saved' : state.status === s));
+    }
+    $('#saved-n').textContent = num(ITEMS.filter(it => saved.has(it.id)).length);
+    $$('.tabs button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === state.view)));
+  }
+
+  function renderHorizon() {
+    const base = filtered(['date', 'status']).filter(it => it.status === 'soon' || it.status === 'open');
+    const days = Array.from({ length: 28 }, (_, i) => ({ date: iso(shift(i)), n: 0 }));
+    const byDate = new Map(days.map(d => [d.date, d]));
+    base.forEach(it => { const d = byDate.get(it.end); if (d) d.n++; });
+    const max = Math.max(1, ...days.map(d => d.n));
+    $('#horizon').innerHTML = days.map((d, i) => {
+      const dt = parseISO(d.date);
+      const wk = dt.getDay() === 0 || dt.getDay() === 6;
+      const mark = i === 0 ? '오늘' : dt.getDate() === 1 ? `${dt.getMonth() + 1}월` : WD[dt.getDay()];
+      const cls = ['hb', wk ? 'wkend' : '', i === 0 ? 'today' : '', i <= 3 ? 'u3' : i <= 7 ? 'u7' : ''].join(' ');
+      const h = d.n ? Math.max(6, Math.round((d.n / max) * 100)) : 0;
+      return `<button type="button" class="${cls}" data-date="${d.date}" aria-pressed="${state.date === d.date}"
+        aria-label="${dt.getMonth() + 1}월 ${dt.getDate()}일 ${WD[dt.getDay()]}요일 마감 ${d.n}건">
+        <span class="hb-n">${d.n || ''}</span><span class="hb-track"><span class="hb-bar" style="height:${h}%"></span></span>
+        <span class="hb-d">${dt.getDate()}</span><span class="hb-m">${mark}</span></button>`;
+    }).join('');
+    const total = days.reduce((s, d) => s + d.n, 0);
+    $('#horizon-note').textContent = state.date
+      ? `${mdw(state.date)} 마감 공고만 보는 중 · 같은 막대를 다시 누르면 해제`
+      : `4주 안에 마감 ${num(total)}건 · 막대를 누르면 그날 마감되는 공고만 봅니다`;
+  }
+
+  function renderFacets() {
+    const count = (facet, getter) => {
+      const base = filtered([facet]);
+      const m = new Map();
+      base.forEach(it => getter(it).forEach(v => m.set(v, (m.get(v) || 0) + 1)));
+      return m;
+    };
+    const typeN = count('types', it => it.types);
+    const srcN = count('sources', it => [it.source]);
+    $$('#f-types .opt').forEach(b => {
+      const n = typeN.get(b.dataset.value) || 0;
+      $('.n', b).textContent = num(n);
+      b.dataset.zero = String(n === 0);
+      b.setAttribute('aria-pressed', String(state.types.has(b.dataset.value)));
+    });
+    $$('#f-sources .opt').forEach(b => {
+      const n = srcN.get(b.dataset.value) || 0;
+      $('.n', b).textContent = num(n);
+      b.dataset.zero = String(n === 0);
+      b.setAttribute('aria-pressed', String(state.sources.has(b.dataset.value)));
+    });
+    $$('#f-targets .chip').forEach(b => b.setAttribute('aria-pressed', String(state.targets.has(b.dataset.value))));
+    $$('#f-fields .chip').forEach(b => b.setAttribute('aria-pressed', String(state.fields.has(b.dataset.value))));
+    $('#f-region').value = state.region;
+    $('#f-closed').checked = state.includeClosed;
+  }
+
+  function activeFilters() {
+    const list = [];
+    if (state.q) list.push({ key: 'q', label: `“${state.q}”` });
+    if (state.status) list.push({ key: 'status', label: STATUS_LABEL[state.status] });
+    if (state.date) list.push({ key: 'date', label: `${mdw(state.date)} 마감` });
+    state.types.forEach(v => list.push({ key: 'types', value: v, label: v }));
+    state.targets.forEach(v => list.push({ key: 'targets', value: v, label: v }));
+    if (state.region) list.push({ key: 'region', label: `${state.region} + 전국` });
+    state.fields.forEach(v => list.push({ key: 'fields', value: v, label: v }));
+    state.sources.forEach(v => list.push({ key: 'sources', value: v, label: SOURCE_INFO[v]?.label || v }));
+    if (state.includeClosed) list.push({ key: 'includeClosed', label: '마감 포함' });
+    return list;
+  }
+
+  function renderActive() {
+    const list = activeFilters();
+    $('#active').innerHTML = list.map(f =>
+      `<button type="button" class="afil" data-key="${f.key}" data-value="${esc(f.value || '')}" aria-label="${esc(f.label)} 필터 지우기">${esc(f.label)} <span aria-hidden="true">×</span></button>`
+    ).join('') + (list.length > 1 ? '<button type="button" class="afil clear" data-key="all">모두 지우기</button>' : '');
+    const n = list.filter(f => f.key !== 'q').length;
+    $('#filter-count').textContent = n ? `(${n})` : '';
+  }
+
+  function highlight(text) {
+    const safe = esc(text);
+    if (!state.tokens.length) return safe;
+    const re = new RegExp(`(${state.tokens.map(t => esc(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+    return safe.replace(re, '<mark>$1</mark>');
+  }
+
+  function ddayBlock(it) {
+    switch (it.status) {
+      case 'closed':   return ['마감', md(it.end)];
+      case 'always':   return ['상시', '수시 접수'];
+      case 'unknown':  return ['확인', '원문 참고'];
+      case 'upcoming': return [`D-${diffDays(it.start)}`, `${md(it.start)} 시작`];
+      default:         return [it.dleft === 0 ? 'D-DAY' : `D-${it.dleft}`, mdw(it.end)];
+    }
+  }
+
+  function periodLine(it) {
+    if (it.start || it.end) {
+      const s = it.start ? ymdDots(it.start) : '';
+      const e = it.end ? ymdDots(it.end) : '';
+      const t = it.endTime ? ` ${it.endTime}` : '';
+      return `${it.source === 'g2b' ? '입찰' : '접수'} ${s} ~ ${e}${t}`;
+    }
+    return it.periodText || '기간 정보 없음';
+  }
+
+  function calendarUrl(it) {
+    if (!it.end) return '';
+    const d = parseISO(it.end);
+    const next = new Date(d); next.setDate(next.getDate() + 1);
+    const f = x => iso(x).replace(/-/g, '');
+    const p = new URLSearchParams({
+      action: 'TEMPLATE', text: `[마감] ${it.title}`, dates: `${f(d)}/${f(next)}`,
+      details: `${it.org || ''}\n${safeUrl(it.url)}`,
+    });
+    return `https://calendar.google.com/calendar/render?${p}`;
+  }
+
+  function rowHTML(it) {
+    const [big, small] = ddayBlock(it);
+    const src = SOURCE_INFO[it.source] || { label: it.source };
+    const url = safeUrl(it.url) || safeUrl(src.home);
+    const isOpen = state.open.has(it.id);
+    const meta = [it.org, it.regions.join('·'), it.target].filter(Boolean);
+    const types = it.types.map(t => `<span class="type${t === '공모전' ? ' contest' : ''}">${esc(t)}</span>`).join('');
+    return `<article class="item v-${it.visual}" data-id="${esc(it.id)}">
+      <div class="dday" aria-label="${esc(big)} ${esc(small)}"><b>${esc(big)}</b><span>${esc(small)}</span></div>
+      <div class="item-body">
+        <div class="item-tags"><span class="src">${esc(src.label)}</span>${types}${it.sample ? '<span class="sample">예시</span>' : ''}</div>
+        <h3 class="item-title">${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${highlight(it.title)}</a>` : highlight(it.title)}</h3>
+        <p class="item-meta">${highlight(meta.join(' · '))}</p>
+        <p class="item-period">${esc(periodLine(it))}${it.amount ? ` · 예산 ${esc(won(it.amount))}` : ''}</p>
+        ${isOpen ? detailHTML(it, url) : ''}
+      </div>
+      <div class="item-actions">
+        <button type="button" class="icon-btn star" data-act="save" aria-pressed="${saved.has(it.id)}" aria-label="관심 공고에 저장">${ICONS.star}</button>
+        <button type="button" class="icon-btn more" data-act="more" aria-expanded="${isOpen}" aria-label="자세히 보기">${ICONS.chevron}</button>
+      </div>
+    </article>`;
+  }
+
+  function detailHTML(it, url) {
+    const cal = calendarUrl(it);
+    const rows = [
+      ['지원 대상', it.target], ['기관', it.org], ['지역', it.regions.join(', ')], ['분류', it.category],
+      ['신청 기간', it.periodText], ['분야', it.fields.join(', ')], ['예산', won(it.amount)],
+      ['출처', `${SOURCE_INFO[it.source]?.label || it.source} (${SOURCE_INFO[it.source]?.owner || ''})`],
+      ['함께 게시', (it.alsoIn || []).map(k => SOURCE_INFO[k]?.label || k).join(', ')],
+    ].filter(([, v]) => v);
+    return `<div class="detail">
+      ${it.summary ? `<p>${esc(it.summary)}</p>` : ''}
+      <dl>${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      <div class="detail-actions">
+        ${url ? `<a class="btn btn-primary" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${it.sample ? '출처 사이트 열기' : '원문 공고 보기'} ↗</a>` : ''}
+        ${cal ? `<a class="btn" href="${esc(cal)}" target="_blank" rel="noopener noreferrer">구글 캘린더에 마감일 추가 ↗</a>` : ''}
+        ${url ? `<button type="button" class="btn" data-act="copy" data-url="${esc(url)}">링크 복사</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  function renderList(items) {
+    $('#count').innerHTML = `${state.view === 'saved' ? '관심 공고' : '공고'} <b>${num(items.length)}</b>건`;
+    const list = $('#list');
+    if (!items.length) {
+      const savedEmpty = state.view === 'saved' && !saved.size;
+      list.innerHTML = `<div class="empty">
+        <h3>${savedEmpty ? '아직 저장한 공고가 없습니다' : '조건에 맞는 공고가 없습니다'}</h3>
+        <p>${savedEmpty ? '공고 오른쪽의 별을 누르면 여기에 모입니다.' : '필터를 줄이거나 다른 검색어로 찾아보세요.'}</p>
+        ${savedEmpty ? '<button type="button" class="btn" data-act="view-all">전체 공고 보기</button>' : '<button type="button" class="btn" data-act="reset">필터 모두 지우기</button>'}
+      </div>`;
+      return;
+    }
+    const shown = items.slice(0, state.limit);
+    list.innerHTML = shown.map(rowHTML).join('') + (items.length > shown.length
+      ? `<div class="more-wrap"><button type="button" class="btn" data-act="more-items">${num(Math.min(PAGE, items.length - shown.length))}건 더 보기 (남은 ${num(items.length - shown.length)}건)</button></div>`
+      : '');
+  }
+
+  function renderConn() {
+    const btn = $('#conn');
+    btn.dataset.mode = META.mode;
+    const n = num(ITEMS.length);
+    const t = {
+      loading: '불러오는 중',
+      sample: `예시 데이터 · ${n}건 · 연결하기`,
+      file: `${META.generatedAt ? fmtStamp(META.generatedAt) + ' 수집' : '수집 파일'} · ${n}건`,
+      live: `실시간 API · ${n}건`,
+    }[META.mode];
+    $('#conn-text').textContent = t;
+    const notice = $('#notice');
+    if (META.mode === 'sample') {
+      notice.className = META.errors?.length ? 'notice err' : 'notice';
+      notice.innerHTML = `<p><b>지금은 예시 데이터입니다.</b> 기관명과 일정은 화면 구성을 보여 주기 위해 만든 것이며, 마감일은 오늘을 기준으로 계산됩니다.
+        실제 공고를 보려면 <button type="button" class="linkbtn" data-act="settings">데이터 연결</button>에서 수집 파일이나 API 프록시 주소를 넣으세요.
+        ${META.errors?.length ? `<br>연결 실패: ${esc(META.errors.join(' / '))}` : ''}</p>`;
+      notice.hidden = false;
+    } else {
+      const failed = Object.entries(META.sources || {}).filter(([, s]) => s && s.ok === false && !s.skipped);
+      notice.className = 'notice err';
+      notice.innerHTML = failed.length ? `<p>일부 출처를 불러오지 못했습니다: ${esc(failed.map(([k, s]) => `${SOURCE_INFO[k]?.label || k}(${s.error || '오류'})`).join(', '))}</p>` : '';
+      notice.hidden = !failed.length;
+    }
+  }
+  function fmtStamp(s) {
+    const d = new Date(s);
+    if (isNaN(d)) return '';
+    return `${d.getMonth() + 1}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  /* ───────── 데이터 불러오기 ───────── */
+  const config = () => ({ mode: 'auto', apiBase: '', dataUrl: DEFAULT_DATA_URL, ...store.get(KEYS.config, {}) });
+
+  async function fetchPayload(url, mode) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 20000);
+    try {
+      const r = await fetch(url, { signal: ctl.signal, cache: 'no-cache' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      if (!Array.isArray(j.items)) throw new Error('items 배열이 없습니다');
+      return { mode, items: j.items, generatedAt: j.generatedAt, sources: j.sources || {} };
+    } catch (e) {
+      throw new Error(e.name === 'AbortError' ? '응답 시간 초과' : e.message);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const apiUrl = (base, path) => base.replace(/\/+$/, '') + path;
+
+  async function load() {
+    $('#app').classList.add('loading');
+    META = { mode: 'loading' };
+    renderConn();
+    const cfg = config();
+    const errors = [];
+    let result = null;
+    if (cfg.mode !== 'sample') {
+      if (cfg.apiBase) {
+        try { result = await fetchPayload(apiUrl(cfg.apiBase, '/api/opportunities'), 'live'); }
+        catch (e) { errors.push(`실시간 API ${e.message}`); }
+      }
+      // 파일을 더블클릭해 연 경우(file://)에는 브라우저가 fetch를 막으므로 건너뜁니다
+      if (!result && cfg.dataUrl && location.protocol !== 'file:') {
+        try { result = await fetchPayload(cfg.dataUrl, 'file'); }
+        catch (e) { if (cfg.dataUrl !== DEFAULT_DATA_URL || cfg.apiBase) errors.push(`수집 파일 ${e.message}`); }
+      }
+    }
+    if (!result) result = { mode: 'sample', items: buildSample(), sources: {}, errors };
+    META = result;
+    ITEMS = result.items.filter(it => it && it.title).map(enrich);
+    $('#app').classList.remove('loading');
+    renderConn();
+    render();
+  }
+
+  /* ───────── 이벤트 ───────── */
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 2400);
+  }
+
+  function setQuery(q) {
+    state.q = q.trim();
+    state.tokens = state.q.toLowerCase().split(/\s+/).filter(Boolean);
+    state.limit = PAGE;
+    render();
+  }
+  let qTimer;
+  $('#q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => setQuery(e.target.value), 140); });
+  $('#search-form').addEventListener('submit', e => { e.preventDefault(); clearTimeout(qTimer); setQuery($('#q').value); searchLive(state.q); });
+
+  /* 실시간 API에 연결돼 있으면 출처별 키워드 검색 결과를 목록에 더합니다 */
+  async function searchLive(q) {
+    const cfg = config();
+    if (META.mode !== 'live' || !q || !cfg.apiBase) return;
+    try {
+      const p = await fetchPayload(`${apiUrl(cfg.apiBase, '/api/opportunities')}?q=${encodeURIComponent(q)}`, 'live');
+      const have = new Set(ITEMS.map(it => it.id));
+      const fresh = p.items.filter(it => it && it.title && !have.has(it.id)).map(enrich);
+      if (fresh.length) { ITEMS.push(...fresh); render(); }
+      toast(fresh.length ? `실시간 검색으로 ${num(fresh.length)}건을 더 찾았습니다` : '실시간 검색에서 새로 찾은 공고가 없습니다');
+    } catch (err) {
+      toast(`실시간 검색 실패: ${err.message}`);
+    }
+  }
+  $('#suggest').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    $('#q').value = b.textContent; setQuery(b.textContent);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
+  });
+
+  $('#pulse').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const s = b.dataset.status;
+    if (s === 'saved') state.view = state.view === 'saved' ? 'all' : 'saved';
+    else { state.status = state.status === s ? '' : s; state.view = 'all'; }
+    state.limit = PAGE; render();
+  });
+  $('#horizon').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.date = state.date === b.dataset.date ? '' : b.dataset.date;
+    state.limit = PAGE; render();
+  });
+  $('#filters').addEventListener('click', e => {
+    const b = e.target.closest('[data-facet]');
+    if (b) {
+      const set = state[b.dataset.facet], v = b.dataset.value;
+      set.has(v) ? set.delete(v) : set.add(v);
+      state.limit = PAGE; render();
+    }
+  });
+  $('#f-region').addEventListener('change', e => { state.region = e.target.value; state.limit = PAGE; render(); });
+  $('#f-closed').addEventListener('change', e => { state.includeClosed = e.target.checked; render(); });
+  $('#sort').addEventListener('change', e => { state.sort = e.target.value; render(); });
+  $('.tabs').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.view = b.dataset.view; state.limit = PAGE; render();
+  });
+
+  function resetAll() {
+    Object.assign(state, { q: '', tokens: [], status: '', date: '', view: 'all', includeClosed: false, region: '', limit: PAGE });
+    ['types', 'sources', 'fields', 'targets'].forEach(k => state[k].clear());
+    $('#q').value = '';
+    render();
+  }
+  $('#reset').addEventListener('click', resetAll);
+  $('#active').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const { key, value } = b.dataset;
+    if (key === 'all') return resetAll();
+    if (key === 'q') { state.q = ''; state.tokens = []; $('#q').value = ''; }
+    else if (state[key] instanceof Set) state[key].delete(value);
+    else if (key === 'includeClosed') state.includeClosed = false;
+    else state[key] = '';
+    render();
+  });
+
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); toast('링크를 복사했습니다'); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch { ok = false; }
+      ta.remove();
+      toast(ok ? '링크를 복사했습니다' : `복사하지 못했습니다. 주소: ${text}`);
+    }
+  }
+
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const act = b.dataset.act;
+    const row = b.closest('.item');
+    const id = row?.dataset.id;
+    if (act === 'save' && id) {
+      saved.has(id) ? saved.delete(id) : saved.add(id);
+      store.set(KEYS.saved, [...saved]);
+      toast(saved.has(id) ? '관심 공고에 저장했습니다' : '관심 공고에서 뺐습니다');
+      render();
+    } else if (act === 'more' && id) {
+      state.open.has(id) ? state.open.delete(id) : state.open.add(id);
+      render();
+      $(`.item[data-id="${CSS.escape(id)}"] [data-act="more"]`)?.focus();
+    } else if (act === 'copy') copyText(b.dataset.url);
+    else if (act === 'more-items') { state.limit += PAGE; render(); }
+    else if (act === 'reset') resetAll();
+    else if (act === 'view-all') { state.view = 'all'; render(); }
+    else if (act === 'settings') openSettings();
+  });
+
+  /* 좁은 화면에서는 필터를 접어 둡니다 */
+  const wide = matchMedia('(min-width: 881px)');
+  const syncFilters = () => { $('#filters').open = wide.matches; };
+  wide.addEventListener?.('change', syncFilters);
+  syncFilters();
+  $('#filters > summary').addEventListener('click', e => { if (wide.matches) e.preventDefault(); });
+
+  /* ───────── 데이터 연결 창 ───────── */
+  const dlg = $('#settings');
+  function srcRows() {
+    $('#src-rows').innerHTML = Object.entries(SOURCE_INFO).map(([k, v]) => {
+      const s = META.sources?.[k];
+      const state = META.mode === 'sample' || !s ? '<span class="state off">연결 안 됨</span>'
+        : s.skipped ? '<span class="state off">인증키 없음</span>'
+        : s.ok ? `<span class="state ok">정상 · ${num(s.count)}건</span>` : `<span class="state bad">${esc(s.error || '오류')}</span>`;
+      const key = v.keyUrl ? `<a href="${esc(v.keyUrl)}" target="_blank" rel="noopener noreferrer">발급 안내 ↗</a>` : '필요 없음';
+      return `<tr><td>${esc(v.label)}</td><td>${esc(v.owner)}</td><td>${state}</td><td>${key}</td></tr>`;
+    }).join('');
+  }
+  function openSettings() {
+    const cfg = config();
+    $('#api-base').value = cfg.apiBase;
+    $('#data-url').value = cfg.dataUrl;
+    $(cfg.mode === 'sample' ? '#mode-sample' : '#mode-auto').checked = true;
+    $('#conn-result').textContent = '';
+    srcRows();
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+  $('#conn').addEventListener('click', openSettings);
+  $('#close-settings').addEventListener('click', () => dlg.close());
+  $('#settings-form').addEventListener('submit', e => {
+    e.preventDefault();
+    store.set(KEYS.config, {
+      mode: $('#mode-sample').checked ? 'sample' : 'auto',
+      apiBase: $('#api-base').value.trim(),
+      dataUrl: $('#data-url').value.trim() || DEFAULT_DATA_URL,
+    });
+    dlg.close();
+    load();
+  });
+  $('#test-conn').addEventListener('click', async () => {
+    const out = $('#conn-result');
+    const base = $('#api-base').value.trim();
+    const file = $('#data-url').value.trim() || DEFAULT_DATA_URL;
+    out.textContent = '확인하는 중…';
+    const lines = [];
+    if (base) {
+      try {
+        const r = await fetch(apiUrl(base, '/api/health'), { cache: 'no-cache' });
+        const j = await r.json();
+        const on = Object.entries(j.sources || {}).filter(([, v]) => v).map(([k]) => SOURCE_INFO[k]?.label || k);
+        lines.push(`프록시 연결됨 · 인증키가 있는 출처: ${on.length ? on.join(', ') : '없음'}`);
+      } catch (e) { lines.push(`프록시에 연결하지 못했습니다 (${e.message}). 주소와 CORS 설정을 확인하세요.`); }
+    }
+    try { const p = await fetchPayload(file, 'file'); lines.push(`수집 파일 확인 · ${num(p.items.length)}건`); }
+    catch (e) { lines.push(`수집 파일을 읽지 못했습니다 (${e.message}).`); }
+    out.textContent = lines.join(' / ');
+  });
+
+  buildFilters();
+  load();
+})();
+</script>
+</body>
+</html>
