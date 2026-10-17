@@ -3,3 +3,5 @@ data/opportunities.json
 node_modules/
 worker/.wrangler/
 .dev.vars
+data/previous.json
+alerts.json

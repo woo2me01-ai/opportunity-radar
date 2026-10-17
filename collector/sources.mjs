@@ -5,6 +5,8 @@
 //   id, source, title, org, category, target, region,
 //   start, end ('YYYY-MM-DD' 또는 null), endTime ('HH:MM'), periodText, always,
 //   url, summary, amount (원), tags[], postedAt ('YYYY-MM-DD')
+//   자격 정보 (출처가 구조화된 값을 줄 때만): ageMin, ageMax, bizYearsMin, bizYearsMax,
+//   prestartup ('only' 예비창업자만 | 'yes' 예비창업자 포함 | 'no' 기창업자만)
 
 const UA = 'opportunity-radar/0.1 (+https://github.com/woo2me01-ai/Project-TimeOverlay)';
 
@@ -180,6 +182,55 @@ async function fetchBizinfo(env, opts) {
 
 /* ───────── 2. K-Startup 사업공고 ───────── */
 
+/**
+ * 창업업력 구간 '예비창업자,1년미만,2년미만,3년미만,5년미만,7년미만,10년미만' →
+ * { prestartup: 'only'|'yes'|'no'|null, bizYearsMin, bizYearsMax } (업력은 만 햇수, 양 끝 포함)
+ */
+export function parseEnyy(s) {
+  const parts = String(s ?? '').split(',').map(t => t.replace(/\s/g, '')).filter(Boolean);
+  if (!parts.length) return {};
+  const TH = [1, 2, 3, 5, 7, 10];
+  let min = null, max = null, open = false;
+  for (const t of parts) {
+    let m;
+    if ((m = /^(\d+)년미만$/.exec(t))) {
+      const n = +m[1];
+      const lo = Math.max(0, ...TH.filter(x => x < n));
+      min = min == null ? lo : Math.min(min, lo);
+      max = max == null ? n - 1 : Math.max(max, n - 1);
+    } else if ((m = /^(\d+)년이상$/.exec(t))) {
+      const n = +m[1];
+      min = min == null ? n : Math.min(min, n);
+      open = true;
+    }
+  }
+  if (open) max = null;
+  const pre = parts.includes('예비창업자');
+  return {
+    prestartup: pre ? (min == null ? 'only' : 'yes') : min != null ? 'no' : null,
+    bizYearsMin: min ? min : null,
+    bizYearsMax: max,
+  };
+}
+
+/** 연령 구간 '만 20세 미만,만 20세 이상 ~ 만 39세 이하,만 40세 이상' → 합집합 { ageMin, ageMax } */
+export function parseAgeBuckets(s) {
+  const parts = String(s ?? '').split(',').map(t => t.trim()).filter(Boolean);
+  if (!parts.length) return {};
+  let min = Infinity, max = -Infinity;
+  for (const t of parts) {
+    let lo = 0, hi = 200;
+    for (const [, n, op] of t.matchAll(/(\d{1,3})\s?세\s?(이상|이하|미만|초과)?/g)) {
+      const v = +n;
+      if (op === '이상') lo = v; else if (op === '초과') lo = v + 1;
+      else if (op === '이하') hi = v; else if (op === '미만') hi = v - 1;
+    }
+    min = Math.min(min, lo);
+    max = Math.max(max, hi);
+  }
+  return { ageMin: min > 0 ? min : null, ageMax: max < 200 ? max : null };
+}
+
 export function normalizeKstartup(x) {
   const start = toDate(x.pbanc_rcpt_bgng_dt);
   const end = toDate(x.pbanc_rcpt_end_dt);
@@ -201,6 +252,8 @@ export function normalizeKstartup(x) {
     amount: null,
     tags: [x.supt_biz_clsfc, x.biz_enyy].filter(Boolean).flatMap(s => String(s).split(',')).map(s => s.trim()).filter(Boolean).slice(0, 8),
     postedAt: null,
+    ...parseEnyy(x.biz_enyy),
+    ...parseAgeBuckets(x.biz_trgt_age),
   };
 }
 
@@ -250,6 +303,8 @@ export function normalizeYouth(x, today) {
     amount: null,
     tags: String(x.plcyKywdNm ?? '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 8),
     postedAt: toDate(x.frstRegDt),
+    ageMin: min || null,
+    ageMax: max || null,
   };
 }
 

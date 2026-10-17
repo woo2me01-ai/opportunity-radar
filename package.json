@@ -4,8 +4,10 @@
   "version": "0.1.0",
   "description": "정부 지원사업·창업·청년정책·공공서비스·공공입찰·공모전을 공공 API로 모아 보는 검색 사이트",
   "scripts": {
-    "test": "node --test collector/sources.test.mjs",
+    "test": "node --test collector/sources.test.mjs collector/rules.test.mjs collector/notify.test.mjs",
     "collect": "node collector/collect.mjs",
+    "notify": "node collector/notify.mjs",
+    "notify:dry": "node collector/notify.mjs --dry-run",
     "serve": "npx --yes serve .",
     "worker:dev": "cd worker && npx --yes wrangler dev",
     "worker:deploy": "cd worker && npx --yes wrangler deploy"

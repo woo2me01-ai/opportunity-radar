@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  findDates, parsePeriod, stripTags, absUrl, pickList, decodeKey, dedupe, collectAll,
+  findDates, parsePeriod, stripTags, absUrl, pickList, decodeKey, dedupe, collectAll, parseEnyy, parseAgeBuckets,
   normalizeBizinfo, normalizeKstartup, normalizeYouth, normalizeGov24, normalizeG2b,
 } from './sources.mjs';
 
@@ -77,6 +77,17 @@ test('K-Startup 항목 변환', () => {
   assert.match(it.target, /예비창업자/);
 });
 
+test('K-Startup 업력·연령 구간을 범위로 바꾼다', () => {
+  assert.deepEqual(parseEnyy('예비창업자'), { prestartup: 'only', bizYearsMin: null, bizYearsMax: null });
+  assert.deepEqual(parseEnyy('예비창업자,1년미만,2년미만,3년미만'), { prestartup: 'yes', bizYearsMin: null, bizYearsMax: 2 });
+  assert.deepEqual(parseEnyy('5년미만,7년미만'), { prestartup: 'no', bizYearsMin: 3, bizYearsMax: 6 });
+  assert.deepEqual(parseEnyy('7년미만,10년미만,10년이상'), { prestartup: 'no', bizYearsMin: 5, bizYearsMax: null });
+  assert.deepEqual(parseEnyy(''), {});
+  assert.deepEqual(parseAgeBuckets('만 20세 이상 ~ 만 39세 이하'), { ageMin: 20, ageMax: 39 });
+  assert.deepEqual(parseAgeBuckets('만 20세 미만,만 20세 이상 ~ 만 39세 이하,만 40세 이상'), { ageMin: null, ageMax: null });
+  assert.deepEqual(parseAgeBuckets('만 20세 미만,만 20세 이상 ~ 만 39세 이하'), { ageMin: null, ageMax: 39 });
+});
+
 test('온통청년 항목 변환', () => {
   const it = normalizeYouth({
     plcyNo: '20260914005400213415', plcyNm: '청년 월세 지원', sprvsnInstCdNm: '국토교통부',
@@ -88,6 +99,7 @@ test('온통청년 항목 변환', () => {
   assert.equal(it.category, '주거 > 주거비지원');
   assert.equal(it.target, '청년 · 만 19~34세');
   assert.equal(it.end, '2026-12-31');
+  assert.deepEqual([it.ageMin, it.ageMax], [19, 34]);
   const always = normalizeYouth({ plcyNo: '1', plcyNm: '면접정장 대여', aplyYmd: '', aplyPrdSeCd: '0057002' }, TODAY);
   assert.equal(always.always, true);
   assert.equal(always.periodText, '상시');
