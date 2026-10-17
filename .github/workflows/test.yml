@@ -1,0 +1,18 @@
+# 풀 리퀘스트마다 변환 · 맞춤도 · 알림 테스트를 돌립니다 (네트워크·인증키 없이)
+name: 테스트
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test

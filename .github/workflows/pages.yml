@@ -1,22 +1,22 @@
-# 기회레이더를 GitHub Pages로 운영하는 워크플로 예시입니다.
-# 사용하려면 이 파일을 저장소 루트의 .github/workflows/ 아래로 복사하세요.
+# 기회레이더: 매일 공고를 모으고, 알림을 보내고, GitHub Pages로 배포합니다.
 #
-# 준비
-#   1. 저장소 Settings → Secrets and variables → Actions → Secrets 에 등록
-#        공공 API  : BIZINFO_API_KEY, DATA_GO_KR_API_KEY, YOUTH_API_KEY  (없는 출처는 건너뜁니다)
-#        알림(선택): ALERTS_JSON (화면의 '이 조건으로 알림 받기'에서 복사)
-#                    TELEGRAM_BOT_TOKEN / RESEND_API_KEY, ALERT_EMAIL_FROM
-#      필요하면 Variables 에 G2B_KEYWORDS (예: 플랫폼,홍보,교육) 등록
-#   2. Settings → Pages → Source 를 "GitHub Actions" 로 지정
+# 처음 한 번 해 둘 일
+#   1. Settings → Pages → Build and deployment → Source 를 "GitHub Actions" 로 지정
+#   2. Settings → Secrets and variables → Actions 에 등록
+#        Secrets  : BIZINFO_API_KEY, DATA_GO_KR_API_KEY, YOUTH_API_KEY  (없는 출처는 건너뜁니다)
+#                   알림을 쓰면 ALERTS_JSON, TELEGRAM_BOT_TOKEN / RESEND_API_KEY, ALERT_EMAIL_FROM
+#        Variables: G2B_KEYWORDS (선택, 예: 플랫폼,홍보,교육)
+#   3. Actions 탭에서 이 워크플로를 한 번 수동 실행 (Run workflow)
 #
-# 매일 아침 공고를 모아 data/opportunities.json 을 만들고, 어제 배포된 결과와 비교해 알림을 보낸 뒤
-# 사이트와 함께 배포합니다. 인증키와 알림 설정은 이 작업 안에서만 쓰이고 배포 결과물에는 들어가지 않습니다.
+# 인증키와 알림 설정은 이 작업 안에서만 쓰이고 배포 결과물에는 들어가지 않습니다.
 
-name: 기회레이더 수집·알림·배포
+name: 수집·알림·배포
 
 on:
   schedule:
     - cron: "50 20 * * *" # 매일 05:50 (KST)
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -25,7 +25,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: opportunity-radar-pages
+  group: pages
   cancel-in-progress: true
 
 jobs:
@@ -39,16 +39,13 @@ jobs:
       - id: pages
         uses: actions/configure-pages@v5
 
-      - name: 규칙 테스트
-        working-directory: opportunity-radar
+      - name: 테스트
         run: npm test
 
       - name: 어제 배포된 결과 받기 (알림 비교용)
-        working-directory: opportunity-radar
         run: curl -fsSL "${{ steps.pages.outputs.base_url }}/data/opportunities.json" -o data/previous.json || echo "어제 결과가 없습니다 (첫 배포)"
 
       - name: 공고 수집
-        working-directory: opportunity-radar
         env:
           BIZINFO_API_KEY: ${{ secrets.BIZINFO_API_KEY }}
           DATA_GO_KR_API_KEY: ${{ secrets.DATA_GO_KR_API_KEY }}
@@ -56,8 +53,9 @@ jobs:
           G2B_KEYWORDS: ${{ vars.G2B_KEYWORDS }}
         run: node collector/collect.mjs
 
+      # 코드를 올릴 때(push)는 보내지 않고, 예약 실행과 수동 실행 때만 보냅니다 (같은 날 두 번 오는 것을 막기 위해)
       - name: 알림 보내기
-        working-directory: opportunity-radar
+        if: github.event_name != 'push'
         continue-on-error: true # 알림이 실패해도 사이트 배포는 계속합니다
         env:
           ALERTS_JSON: ${{ secrets.ALERTS_JSON }}
@@ -68,12 +66,11 @@ jobs:
         run: node collector/notify.mjs --current data/opportunities.json --prev data/previous.json
 
       - name: 비교용 파일 정리
-        working-directory: opportunity-radar
         run: rm -f data/previous.json
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: opportunity-radar
+          path: .
 
   deploy:
     needs: build

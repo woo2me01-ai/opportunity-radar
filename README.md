@@ -188,14 +188,12 @@ flowchart LR
 `index.html`을 브라우저로 열면 예시 데이터로 동작합니다(`rules.js`가 같은 폴더에 있어야 합니다). 수집 파일까지 읽으려면 로컬 서버로 엽니다.
 
 ```bash
-cd opportunity-radar
 npm run serve        # http://localhost:3000
 ```
 
 ### 공고 수집 (A 방식)
 
 ```bash
-cd opportunity-radar
 export BIZINFO_API_KEY=...      # 기업마당
 export DATA_GO_KR_API_KEY=...   # 공공데이터포털 (K-Startup, 보조금24, 나라장터)
 export YOUTH_API_KEY=...        # 온통청년
@@ -204,7 +202,19 @@ npm run collect                 # → data/opportunities.json
 npm test                        # 변환 · 맞춤도 · 알림 테스트 (네트워크 없이)
 ```
 
-키가 없는 출처는 건너뜁니다. GitHub Pages로 매일 자동 배포하려면 `deploy/github-pages.yml`을 저장소의 `.github/workflows/`로 복사하고, 파일 위쪽 안내대로 Secrets를 등록합니다. 이 워크플로는 수집 → 알림 → 배포 순서로 돌고, 알림이 실패해도 배포는 계속합니다.
+키가 없는 출처는 건너뜁니다.
+
+### 매일 자동 수집·배포 (GitHub Actions + Pages)
+
+`.github/workflows/pages.yml`이 매일 05:50(KST)에 **수집 → 알림 → 배포**를 돌립니다. `main`에 코드를 올릴 때도 수집·배포가 돌고(알림은 보내지 않음), Actions 탭에서 수동으로 돌릴 수도 있습니다. 알림이 실패해도 배포는 계속합니다.
+
+처음 한 번 해 둘 일:
+
+1. **Settings → Pages → Build and deployment → Source**를 **GitHub Actions**로 지정
+2. **Settings → Secrets and variables → Actions**에 인증키 등록: `BIZINFO_API_KEY`, `DATA_GO_KR_API_KEY`, `YOUTH_API_KEY` (없는 출처는 건너뜀). 나라장터 키워드는 Variables의 `G2B_KEYWORDS`
+3. **Actions → 수집·알림·배포 → Run workflow**로 한 번 실행
+
+인증키를 하나도 넣지 않은 동안에는 수집 결과가 비어 있어, 사이트가 예시 데이터를 보여 주며 그 이유를 안내합니다. 풀 리퀘스트에는 `.github/workflows/test.yml`이 테스트만 돌립니다.
 
 ### 알림 받기
 
@@ -241,7 +251,7 @@ ALERTS_JSON="$(cat alerts.json)" npm run notify:dry -- --current data/opportunit
 ### 실시간 프록시 (B 방식)
 
 ```bash
-cd opportunity-radar/worker
+cd worker
 npx wrangler secret put BIZINFO_API_KEY
 npx wrangler secret put DATA_GO_KR_API_KEY
 npx wrangler secret put YOUTH_API_KEY
@@ -290,7 +300,9 @@ opportunity-radar/
 ├── worker/
 │   ├── worker.mjs             # Cloudflare Worker 프록시
 │   └── wrangler.toml
-├── deploy/github-pages.yml    # 매일 수집 · 알림 · Pages 배포 워크플로 예시
+├── .github/workflows/
+│   ├── pages.yml              # 매일 수집 · 알림 · Pages 배포
+│   └── test.yml               # 풀 리퀘스트 테스트
 ├── data/contests.example.json # 직접 등록 공모전 형식
 └── package.json
 ```

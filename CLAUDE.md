@@ -4,10 +4,12 @@
 기획 전체(대상 사용자, 데이터 출처, 구조, 화면, 단계별 계획, 주의할 점)는 `README.md`에 있습니다. 작업 전에 먼저 읽으세요.
 
 ## 지금 상태 (2026-10-17)
-- 완료: 화면(`index.html`), 공용 규칙(`rules.js`), 수집기(`collector/collect.mjs`), 알림(`collector/notify.mjs`), Cloudflare Worker 프록시(`worker/`), 매일 수집·알림·배포 워크플로 예시(`deploy/github-pages.yml`)
+- 완료: 화면(`index.html`), 공용 규칙(`rules.js`), 수집기(`collector/collect.mjs`), 알림(`collector/notify.mjs`), Cloudflare Worker 프록시(`worker/`), 매일 수집·알림·배포 워크플로(`.github/workflows/pages.yml`)
 - 테스트 31개 통과 (`npm test`, 네트워크 없이 고정 데이터로 실행)
 - **실제 API는 아직 한 번도 호출해 보지 않았습니다.** 응답 필드는 오픈소스 프로젝트에 공개된 실제 응답에 맞춘 것입니다. 인증키를 받으면 가장 먼저 `npm run collect`로 출처별 건수와 오류를 확인하세요.
-- 워크플로는 아직 꺼져 있습니다 (`.github/workflows/`로 옮겨야 동작)
+- 워크플로: 매일 05:50 KST 수집·알림·배포, `main` push 때는 수집·배포만, 풀 리퀘스트는 `test.yml`로 테스트만
+- 사이트가 실제로 뜨려면 저장소 Settings에서 Pages 소스를 GitHub Actions로 지정하고 인증키 Secrets를 등록해야 합니다 (사람이 할 일)
+- 원래 `woo2me01-ai/Project-TimeOverlay` 저장소에서 기록째 옮겨 왔습니다
 
 ## 명령
 ```bash
@@ -34,7 +36,7 @@ npm run worker:dev   # Worker 로컬 실행
 - 공모전: 전용 공공 API 없음 → 제목 키워드 추출 + `data/contests.json` 직접 등록
 
 ## 다음 할 일 후보
-1. 별도 저장소로 옮기고 워크플로 켜기 (Secrets 등록, Pages 소스를 GitHub Actions로)
+1. Pages 활성화와 Secrets 등록 뒤 첫 실행 결과 확인
 2. 실제 인증키로 수집해 필드 매핑 점검, 실패 출처 수정
 3. 맞춤도에 매출·직원 수·업종 조건 추가, 공고문 첨부파일(PDF·HWP)에서 자격 요건 추출
 4. 출처 확대: 과기정통부 사업공고 API(공공데이터포털 15074634), 지자체 공고

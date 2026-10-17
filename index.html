@@ -1050,7 +1050,7 @@ dialog::backdrop { background: rgb(8 12 14 / .5); }
       notice.className = META.errors?.length ? 'notice err' : 'notice';
       notice.innerHTML = `<p><b>지금은 예시 데이터입니다.</b> 기관명과 일정은 화면 구성을 보여 주기 위해 만든 것이며, 마감일은 오늘을 기준으로 계산됩니다.
         실제 공고를 보려면 <button type="button" class="linkbtn" data-act="settings">데이터 연결</button>에서 수집 파일이나 API 프록시 주소를 넣으세요.
-        ${META.errors?.length ? `<br>연결 실패: ${esc(META.errors.join(' / '))}` : ''}</p>`;
+        ${META.errors?.length ? `<br>실제 데이터를 쓰지 못한 이유: ${esc(META.errors.join(' / '))}` : ''}</p>`;
       notice.hidden = false;
     } else {
       const failed = Object.entries(META.sources || {}).filter(([, s]) => s && s.ok === false && !s.skipped);
@@ -1094,8 +1094,12 @@ dialog::backdrop { background: rgb(8 12 14 / .5); }
       }
       // 파일을 더블클릭해 연 경우(file://)에는 브라우저가 fetch를 막으므로 건너뜁니다
       if (!result && cfg.dataUrl && location.protocol !== 'file:') {
-        try { result = await fetchPayload(cfg.dataUrl, 'file'); }
-        catch (e) { if (cfg.dataUrl !== DEFAULT_DATA_URL || cfg.apiBase) errors.push(`수집 파일 ${e.message}`); }
+        try {
+          const p = await fetchPayload(cfg.dataUrl, 'file');
+          // 인증키를 넣기 전에는 수집 결과가 비어 있으므로 예시 데이터로 보여 주고 이유를 알립니다
+          if (p.items.length) result = p;
+          else errors.push(Object.values(p.sources).every(s => s.skipped) ? '수집 파일이 비어 있습니다 (저장소에 인증키가 아직 없습니다)' : '수집 파일에 공고가 없습니다');
+        } catch (e) { if (cfg.dataUrl !== DEFAULT_DATA_URL || cfg.apiBase) errors.push(`수집 파일 ${e.message}`); }
       }
     }
     if (!result) result = { mode: 'sample', items: buildSample(), sources: {}, errors };

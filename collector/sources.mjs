@@ -8,7 +8,7 @@
 //   자격 정보 (출처가 구조화된 값을 줄 때만): ageMin, ageMax, bizYearsMin, bizYearsMax,
 //   prestartup ('only' 예비창업자만 | 'yes' 예비창업자 포함 | 'no' 기창업자만)
 
-const UA = 'opportunity-radar/0.1 (+https://github.com/woo2me01-ai/Project-TimeOverlay)';
+const UA = 'opportunity-radar/0.1 (+https://github.com/woo2me01-ai/opportunity-radar)';
 
 /* ───────── 작은 도구 ───────── */
 
