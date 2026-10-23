@@ -494,7 +494,9 @@ export function dedupe(items) {
     const key = `${titleKey(it.title)}|${it.end ?? ''}`;
     const prev = byKey.get(key);
     if (!prev) { byKey.set(key, { ...it, alsoIn: [] }); continue; }
-    if (prev.source !== it.source && !prev.alsoIn.includes(it.source)) prev.alsoIn.push(it.source);
+    // 같은 출처 안에서 제목·마감일이 같은 공고는 기관만 다른 별개 공고일 수 있어 합치지 않습니다
+    if (prev.source === it.source) { byKey.set(`${key}|${it.id}`, { ...it, alsoIn: [] }); continue; }
+    if (!prev.alsoIn.includes(it.source)) prev.alsoIn.push(it.source);
   }
   return [...byKey.values()];
 }

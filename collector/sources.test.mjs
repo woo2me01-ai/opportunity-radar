@@ -139,6 +139,11 @@ test('같은 공고는 하나로 합친다', () => {
   assert.equal(out.length, 2);
   assert.equal(out[0].source, 'kstartup');
   assert.deepEqual(out[0].alsoIn, ['bizinfo']);
+  const same = dedupe([
+    { id: 'bizinfo:1', source: 'bizinfo', title: '2026년 수출바우처 참여기업 모집', org: '○○도', end: '2026-10-30' },
+    { id: 'bizinfo:2', source: 'bizinfo', title: '2026년 수출바우처 참여기업 모집', org: '△△시', end: '2026-10-30' },
+  ]);
+  assert.equal(same.length, 2, '같은 출처 안의 같은 제목은 합치지 않는다');
 });
 
 /* 응답 껍데기와 오류 처리: fetch를 흉내 내어 collectAll 전체를 돌려 본다 */
