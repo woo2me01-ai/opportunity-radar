@@ -106,6 +106,21 @@ export function decodeKey(key) {
   try { return /%[0-9A-F]{2}/i.test(k) ? decodeURIComponent(k) : k; } catch { return k; }
 }
 
+const STATUS_HINT = {
+  401: '인증키가 틀렸거나 아직 등록되지 않음',
+  403: '이 API를 쓸 권한이 없음, 활용신청 승인 여부 확인',
+  429: '호출 한도 초과',
+};
+
+/** 오류 응답 본문을 로그에 남길 만큼 줄이고, 인증키처럼 보이는 긴 문자열(숫자·소문자 섞인 32자 이상)은 가립니다 */
+export function errorDetail(text) {
+  return stripTags(text)
+    .replace(/\s+/g, ' ')
+    .replace(/[A-Za-z0-9+/=%_-]{32,}/g, t => (/\d/.test(t) && /[a-z]/.test(t) ? '***' : t))
+    .trim()
+    .slice(0, 160);
+}
+
 export async function getJSON(url, { timeoutMs = 25000, retries = 1, fetchImpl = globalThis.fetch } = {}) {
   for (let attempt = 0; ; attempt++) {
     const ctl = new AbortController();
@@ -113,12 +128,24 @@ export async function getJSON(url, { timeoutMs = 25000, retries = 1, fetchImpl =
     try {
       const res = await fetchImpl(String(url), { signal: ctl.signal, headers: { accept: 'application/json', 'user-agent': UA } });
       const text = await res.text();
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const hint = STATUS_HINT[res.status];
+        const detail = errorDetail(text);
+        const err = new Error(`HTTP ${res.status}${hint ? ` (${hint})` : ''}${detail ? `: ${detail}` : ''}`);
+        err.final = res.status === 401 || res.status === 403; // 다시 불러도 같은 결과
+        throw err;
+      }
       try { return JSON.parse(text); }
-      catch { throw new Error(text.trim().startsWith('<') ? 'JSON 대신 XML/HTML 응답 (인증키나 파라미터를 확인하세요)' : 'JSON을 읽지 못했습니다'); }
+      catch {
+        const err = new Error(text.trim().startsWith('<')
+          ? `JSON 대신 XML/HTML 응답 (인증키나 파라미터를 확인하세요): ${errorDetail(text)}`
+          : 'JSON을 읽지 못했습니다');
+        err.final = true;
+        throw err;
+      }
     } catch (e) {
       const err = e.name === 'AbortError' ? new Error('응답 시간 초과') : e;
-      if (attempt >= retries) throw err;
+      if (attempt >= retries || err.final) throw err;
       await sleep(1000 * (attempt + 1));
     } finally {
       clearTimeout(timer);
@@ -491,7 +518,7 @@ export async function collectAll(env, opts = {}) {
       sources[src.id] = { ok: true, count: items.length, ms: Date.now() - t0 };
       return items;
     } catch (e) {
-      sources[src.id] = { ok: false, error: String(e.message || e).slice(0, 120), count: 0, ms: Date.now() - t0 };
+      sources[src.id] = { ok: false, error: String(e.message || e).slice(0, 240), count: 0, ms: Date.now() - t0 };
       return [];
     }
   }));

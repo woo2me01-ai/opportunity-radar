@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  findDates, parsePeriod, stripTags, absUrl, pickList, decodeKey, dedupe, collectAll, parseEnyy, parseAgeBuckets,
+  findDates, parsePeriod, stripTags, absUrl, pickList, decodeKey, dedupe, collectAll, parseEnyy, parseAgeBuckets, errorDetail,
   normalizeBizinfo, normalizeKstartup, normalizeYouth, normalizeGov24, normalizeG2b,
 } from './sources.mjs';
 
@@ -196,4 +196,22 @@ test('collectAll: 기업마당 오류 본문(reqErr)을 실패로 본다', async
   const out = await collectAll({ BIZINFO_API_KEY: 'k' }, { only: ['bizinfo'], fetchImpl, now: NOW, retries: 0 });
   assert.equal(out.sources.bizinfo.ok, false);
   assert.equal(out.sources.bizinfo.error, '페이지 번호를 입력해주세요.');
+});
+
+test('거절 응답은 이유를 남기고, 다시 부르지 않으며, 인증키처럼 보이는 문자열은 가린다', async () => {
+  const calls = [];
+  const fetchImpl = async url => {
+    calls.push(url);
+    const u = new URL(url);
+    if (u.host === 'api.odcloud.kr') return new Response(JSON.stringify({ code: -4, msg: '등록되지 않은 인증키 입니다.' }), { status: 401 });
+    if (u.pathname.includes('B552735')) return new Response('Forbidden', { status: 403 });
+    return new Response('<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>SERVICE ERROR</errMsg><returnAuthMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</returnAuthMsg><key>abcDEF123ghiJKL456mnoPQR789stuVWX0yz</key></cmmMsgHeader></OpenAPI_ServiceResponse>', { status: 200 });
+  };
+  const out = await collectAll({ DATA_GO_KR_API_KEY: 'k' }, { only: ['kstartup', 'gov24', 'g2b'], fetchImpl, now: NOW });
+  assert.match(out.sources.gov24.error, /^HTTP 401 \(인증키가 틀렸거나 아직 등록되지 않음\): .*등록되지 않은 인증키/);
+  assert.match(out.sources.kstartup.error, /^HTTP 403 \(.*활용신청.*\): Forbidden$/);
+  assert.match(out.sources.g2b.error, /SERVICE_KEY_IS_NOT_REGISTERED_ERROR/);
+  assert.ok(!out.sources.g2b.error.includes('abcDEF123'), '키처럼 보이는 문자열은 가린다');
+  assert.equal(calls.filter(u => u.includes('odcloud')).length, 1, '401은 재시도하지 않는다');
+  assert.equal(errorDetail('<p>  a\n b </p>'), 'a b');
 });
